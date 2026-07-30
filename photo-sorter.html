@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contact Sheet — sort photos by people</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0e1316;
+    --panel:#151d21;
+    --panel-2:#1b262b;
+    --line:#26343b;
+    --ink:#eaf1f4;
+    --muted:#8496a0;
+    --solo:#6fb7d8;
+    --group:#e6a24d;
+    --none:#6d7d85;
+    --danger:#d97b6c;
+    --radius:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"Space Grotesk",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    line-height:1.5;
+  }
+  .wrap{max-width:1280px;margin:0 auto;padding:28px 22px 80px}
+
+  /* Instrument readout header */
+  header{
+    display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;
+    gap:18px;padding-bottom:18px;border-bottom:1px solid var(--line);
+  }
+  .title-block h1{
+    font-size:clamp(26px,4vw,40px);font-weight:700;letter-spacing:-0.02em;margin:0;
+  }
+  .title-block p{margin:6px 0 0;color:var(--muted);max-width:52ch;font-size:14.5px}
+  .readout{
+    font-family:"Space Mono",monospace;font-size:12px;color:var(--muted);
+    border:1px solid var(--line);border-radius:6px;padding:9px 12px;background:var(--panel);
+    white-space:nowrap;
+  }
+  .readout b{color:var(--ink);font-weight:700}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;vertical-align:middle;background:var(--muted)}
+  .dot.ok{background:var(--solo)}
+  .dot.warn{background:var(--group)}
+  .dot.err{background:var(--danger)}
+  .dot.busy{background:var(--group);animation:pulse 1s infinite ease-in-out}
+  @keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+
+  /* Controls */
+  .controls{
+    display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin:22px 0 10px;
+  }
+  .btn{
+    font-family:inherit;font-size:14px;font-weight:500;color:var(--ink);
+    background:var(--panel-2);border:1px solid var(--line);border-radius:8px;
+    padding:10px 16px;cursor:pointer;transition:border-color .15s,background .15s,transform .05s;
+  }
+  .btn:hover{border-color:var(--solo)}
+  .btn:active{transform:translateY(1px)}
+  .btn:focus-visible{outline:2px solid var(--solo);outline-offset:2px}
+  .btn.primary{background:var(--solo);color:#062029;border-color:var(--solo);font-weight:700}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.ghost{background:transparent}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.danger:hover{border-color:var(--danger)}
+
+  .slider-wrap{
+    display:flex;align-items:center;gap:10px;font-family:"Space Mono",monospace;
+    font-size:12px;color:var(--muted);margin-left:auto;
+  }
+  .slider-wrap input[type=range]{accent-color:var(--solo);width:120px}
+  .slider-wrap b{color:var(--ink)}
+
+  /* Dropzone */
+  .dropzone{
+    margin-top:16px;border:1.5px dashed var(--line);border-radius:var(--radius);
+    padding:34px;text-align:center;color:var(--muted);cursor:pointer;
+    transition:border-color .15s,background .15s;background:rgba(111,183,216,0.02);
+  }
+  .dropzone:hover,.dropzone.drag{border-color:var(--solo);background:rgba(111,183,216,0.06);color:var(--ink)}
+  .dropzone strong{color:var(--ink);font-weight:700}
+  .dropzone .sub{font-size:13px;margin-top:6px}
+
+  /* Trays */
+  .trays{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:26px}
+  .tray{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    display:flex;flex-direction:column;min-height:220px;transition:border-color .15s,background .15s;
+  }
+  .tray.drag-over{border-color:var(--solo);background:var(--panel-2)}
+  .tray-head{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 16px;border-bottom:1px solid var(--line);
+  }
+  .tray-name{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px}
+  .tray-name .swatch{width:9px;height:9px;border-radius:2px}
+  .tray[data-tray=solo] .swatch{background:var(--solo)}
+  .tray[data-tray=group] .swatch{background:var(--group)}
+  .tray[data-tray=none] .swatch{background:var(--none)}
+  .tray-count{font-family:"Space Mono",monospace;font-size:13px;color:var(--muted)}
+  .tray-body{
+    padding:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));
+    gap:12px;align-content:start;flex:1;
+  }
+  .tray-empty{
+    grid-column:1/-1;color:var(--muted);font-size:13px;text-align:center;
+    padding:26px 8px;font-family:"Space Mono",monospace;
+  }
+  .dl-row{padding:12px 16px;border-top:1px solid var(--line)}
+  .dl-row .btn{width:100%;font-size:13px;padding:8px}
+
+  /* Photo card */
+  .card{
+    position:relative;border-radius:8px;overflow:hidden;background:#000;
+    aspect-ratio:1/1;cursor:grab;border:1px solid var(--line);
+  }
+  .card:active{cursor:grabbing}
+  .card img{width:100%;height:100%;object-fit:cover;display:block}
+  .card.dragging{opacity:.4}
+  .badge{
+    position:absolute;top:6px;left:6px;font-family:"Space Mono",monospace;
+    font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;
+    background:rgba(6,20,26,.82);color:var(--ink);backdrop-filter:blur(2px);
+    border:1px solid rgba(255,255,255,.12);
+  }
+  .badge.solo{color:var(--solo)}
+  .badge.group{color:var(--group)}
+  .badge.none{color:var(--none)}
+  .badge.pending{color:var(--muted)}
+  .card-actions{
+    position:absolute;left:0;right:0;bottom:0;display:flex;
+    opacity:0;transition:opacity .15s;background:linear-gradient(transparent,rgba(6,20,26,.9));
+  }
+  .card:hover .card-actions,.card:focus-within .card-actions{opacity:1}
+  .card-actions button{
+    flex:1;font-family:"Space Mono",monospace;font-size:10px;font-weight:700;
+    background:transparent;border:none;color:var(--muted);padding:6px 0;cursor:pointer;
+    border-top:1px solid rgba(255,255,255,.08);
+  }
+  .card-actions button:hover{color:var(--ink);background:rgba(255,255,255,.06)}
+  .card-actions button[data-to=solo]:hover{color:var(--solo)}
+  .card-actions button[data-to=group]:hover{color:var(--group)}
+  .card-actions button[data-to=none]:hover{color:var(--none)}
+  .card-actions button.active{color:var(--ink)}
+
+  .note{margin-top:26px;font-size:12.5px;color:var(--muted);font-family:"Space Mono",monospace;line-height:1.7}
+  .note code{color:var(--ink)}
+  a{color:var(--solo)}
+
+  @media (max-width:820px){
+    .trays{grid-template-columns:1fr}
+    .slider-wrap{margin-left:0;width:100%}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="title-block">
+      <h1>Contact Sheet</h1>
+      <p>Drop in a pile of photos and it sorts them by how many people are in each one. Everything runs in your browser, so the images never leave your device.</p>
+    </div>
+    <div class="readout" id="readout"><span class="dot" id="statusDot"></span><span id="statusText">Loading detector…</span></div>
+  </header>
+
+  <div class="controls">
+    <button class="btn primary" id="pickBtn">Add photos</button>
+    <button class="btn ghost" id="resortBtn" disabled>Re-sort automatically</button>
+    <button class="btn ghost danger" id="clearBtn" disabled>Clear all</button>
+    <input type="file" id="fileInput" accept="image/*" multiple hidden>
+    <div class="slider-wrap">
+      <label for="sens">sensitivity</label>
+      <input type="range" id="sens" min="10" max="80" value="45">
+      <b id="sensVal">0.45</b>
+    </div>
+  </div>
+
+  <div class="dropzone" id="dropzone">
+    <strong>Drop photos here</strong> or click to browse
+    <div class="sub">JPG, PNG, WebP, GIF — as many as you like</div>
+  </div>
+
+  <div class="trays">
+    <section class="tray" data-tray="solo" id="tray-solo">
+      <div class="tray-head">
+        <div class="tray-name"><span class="swatch"></span>Solo</div>
+        <div class="tray-count" id="count-solo">0</div>
+      </div>
+      <div class="tray-body" id="body-solo"><div class="tray-empty">one person</div></div>
+      <div class="dl-row"><button class="btn ghost" data-dl="solo" disabled>Download .zip</button></div>
+    </section>
+
+    <section class="tray" data-tray="group" id="tray-group">
+      <div class="tray-head">
+        <div class="tray-name"><span class="swatch"></span>Group</div>
+        <div class="tray-count" id="count-group">0</div>
+      </div>
+      <div class="tray-body" id="body-group"><div class="tray-empty">two or more people</div></div>
+      <div class="dl-row"><button class="btn ghost" data-dl="group" disabled>Download .zip</button></div>
+    </section>
+
+    <section class="tray" data-tray="none" id="tray-none">
+      <div class="tray-head">
+        <div class="tray-name"><span class="swatch"></span>No people</div>
+        <div class="tray-count" id="count-none">0</div>
+      </div>
+      <div class="tray-body" id="body-none"><div class="tray-empty">nobody detected</div></div>
+      <div class="dl-row"><button class="btn ghost" data-dl="none" disabled>Download .zip</button></div>
+    </section>
+  </div>
+
+  <p class="note" id="note">
+    Wrong guess? Drag any photo into another tray, or use the small <code>solo / group / none</code> buttons that appear when you hover a photo. Detection is a helper, not a verdict.
+  </p>
+</div>
+
+<!-- Libraries: JSZip for downloads, TF.js + COCO-SSD for person detection -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+/* ---------- tiny helpers ---------- */
+const $ = id => document.getElementById(id);
+const statusDot = $('statusDot'), statusText = $('statusText');
+function setStatus(text, kind){
+  statusText.textContent = text;
+  statusDot.className = 'dot' + (kind ? ' ' + kind : '');
+}
+
+/* ---------- load a script from the first CDN that works ---------- */
+function loadScript(urls){
+  return new Promise((resolve, reject) => {
+    let i = 0;
+    const tryNext = () => {
+      if (i >= urls.length) return reject(new Error('all sources failed'));
+      const s = document.createElement('script');
+      s.src = urls[i++];
+      s.onload = () => resolve();
+      s.onerror = () => { s.remove(); tryNext(); };
+      document.head.appendChild(s);
+    };
+    tryNext();
+  });
+}
+
+/* ---------- state ---------- */
+let model = null;            // coco-ssd model, or null in manual mode
+let threshold = 0.45;        // detection confidence cut-off
+const photos = new Map();    // id -> { id, name, file, url, scores:[], tray, auto:bool }
+let nextId = 1;
+
+/* ---------- detector boot ---------- */
+async function bootDetector(){
+  setStatus('Loading detector…', 'busy');
+  try{
+    await loadScript([
+      'https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.22.0/tf.min.js',
+      'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js',
+      'https://unpkg.com/@tensorflow/tfjs@4.22.0/dist/tf.min.js'
+    ]);
+    await loadScript([
+      'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js',
+      'https://unpkg.com/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/tensorflow-models-coco-ssd/2.2.3/coco-ssd.min.js'
+    ]);
+    model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
+    setStatus('Detector ready', 'ok');
+  }catch(err){
+    model = null;
+    setStatus('Manual mode — auto-detect unavailable', 'err');
+    $('note').innerHTML = 'The detector could not load on this network, so photos land in <code>No people</code> and you sort them by hand. Drag between trays or use the hover buttons. If you expected auto-sort, check your connection and reload.';
+  }
+}
+
+/* ---------- classify from stored scores + current threshold ---------- */
+function classify(scores){
+  const n = scores.filter(s => s >= threshold).length;
+  if (n === 0) return 'none';
+  if (n === 1) return 'solo';
+  return 'group';
+}
+
+/* ---------- add files ---------- */
+async function addFiles(fileList){
+  const files = [...fileList].filter(f => f.type.startsWith('image/'));
+  if (!files.length) return;
+  updateControls();
+
+  for (const file of files){
+    const id = nextId++;
+    const url = URL.createObjectURL(file);
+    const p = { id, name: file.name, file, url, scores: [], tray: 'none', auto: false };
+    photos.set(id, p);
+    renderCard(p);          // show immediately, pending
+    placeCard(p);
+  }
+  refreshCounts();
+  updateControls();
+
+  if (model) await analyseAll();
+}
+
+/* ---------- run detection over every un-analysed photo ---------- */
+let analysing = false;
+async function analyseAll(){
+  if (!model || analysing) return;
+  analysing = true;
+  const pending = [...photos.values()].filter(p => !p.auto);
+  let done = 0;
+  for (const p of pending){
+    setStatus(`Analysing ${++done} / ${pending.length}…`, 'busy');
+    try{
+      const img = await loadImage(p.url);
+      const preds = await model.detect(img, 20);
+      p.scores = preds.filter(x => x.class === 'person').map(x => x.score);
+      p.auto = true;
+    }catch(e){
+      p.scores = [];
+      p.auto = true;
+    }
+    p.tray = classify(p.scores);
+    placeCard(p);
+    updateCard(p);
+    refreshCounts();
+    await new Promise(r => setTimeout(r, 0)); // let UI breathe
+  }
+  analysing = false;
+  setStatus('Detector ready', 'ok');
+  updateControls();
+}
+
+function loadImage(src){
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = rej;
+    img.src = src;
+  });
+}
+
+/* ---------- rendering ---------- */
+function renderCard(p){
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.id = 'card-' + p.id;
+  card.draggable = true;
+  card.innerHTML = `
+    <span class="badge pending" id="badge-${p.id}">…</span>
+    <img src="${p.url}" alt="${escapeHtml(p.name)}" loading="lazy">
+    <div class="card-actions">
+      <button data-to="solo" title="mark solo">solo</button>
+      <button data-to="group" title="mark group">group</button>
+      <button data-to="none" title="mark none">none</button>
+    </div>`;
+  card.addEventListener('dragstart', e => {
+    e.dataTransfer.setData('text/plain', p.id);
+    card.classList.add('dragging');
+  });
+  card.addEventListener('dragend', () => card.classList.remove('dragging'));
+  card.querySelectorAll('.card-actions button').forEach(b => {
+    b.addEventListener('click', () => moveTo(p.id, b.dataset.to));
+  });
+  p._el = card;
+}
+
+function updateCard(p){
+  if (!p._el) return;
+  const badge = p._el.querySelector('.badge');
+  if (!badge) return;
+  const n = p.scores.filter(s => s >= threshold).length;
+  if (!p.auto && model){ badge.textContent = '…'; badge.className = 'badge pending'; return; }
+  badge.textContent = n === 0 ? '0' : (n === 1 ? '1' : n + '');
+  badge.className = 'badge ' + p.tray;
+  // mark active override button
+  p._el.querySelectorAll('.card-actions button').forEach(b =>
+    b.classList.toggle('active', b.dataset.to === p.tray));
+}
+
+function placeCard(p){
+  if (!p._el) return;
+  const body = $('body-' + p.tray);
+  const empty = body.querySelector('.tray-empty');
+  if (empty) empty.remove();
+  body.appendChild(p._el);
+  updateCard(p);
+}
+
+function moveTo(id, tray){
+  const p = photos.get(id);
+  if (!p) return;
+  p.tray = tray;
+  placeCard(p);
+  refreshCounts();
+}
+
+/* ---------- counts, empties, controls ---------- */
+function refreshCounts(){
+  for (const t of ['solo','group','none']){
+    const body = $('body-' + t);
+    const cards = body.querySelectorAll('.card').length;
+    $('count-' + t).textContent = cards;
+    if (cards === 0 && !body.querySelector('.tray-empty')){
+      const d = document.createElement('div');
+      d.className = 'tray-empty';
+      d.textContent = t === 'solo' ? 'one person' : t === 'group' ? 'two or more people' : 'nobody detected';
+      body.appendChild(d);
+    }
+    document.querySelector(`[data-dl="${t}"]`).disabled = cards === 0;
+  }
+}
+
+function updateControls(){
+  const has = photos.size > 0;
+  $('clearBtn').disabled = !has;
+  $('resortBtn').disabled = !has || !model;
+}
+
+/* ---------- downloads ---------- */
+async function downloadZip(tray){
+  const items = [...photos.values()].filter(p => p.tray === tray);
+  if (!items.length) return;
+  const zip = new JSZip();
+  const used = {};
+  for (const p of items){
+    let name = p.name || ('photo-' + p.id);
+    if (used[name]){ const dot = name.lastIndexOf('.'); name = dot>0 ? name.slice(0,dot)+'-'+p.id+name.slice(dot) : name+'-'+p.id; }
+    used[name] = true;
+    zip.file(name, p.file);
+  }
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = tray + '-photos.zip';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+/* ---------- misc ---------- */
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function clearAll(){
+  for (const p of photos.values()) URL.revokeObjectURL(p.url);
+  photos.clear();
+  for (const t of ['solo','group','none']) $('body-'+t).innerHTML = '';
+  refreshCounts();
+  updateControls();
+}
+
+/* ---------- wire up events ---------- */
+$('pickBtn').addEventListener('click', () => $('fileInput').click());
+$('dropzone').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', e => { addFiles(e.target.files); e.target.value=''; });
+$('clearBtn').addEventListener('click', clearAll);
+$('resortBtn').addEventListener('click', () => {
+  for (const p of photos.values()) p.auto = false;
+  analyseAll();
+});
+
+$('sens').addEventListener('input', e => {
+  threshold = e.target.value / 100;
+  $('sensVal').textContent = threshold.toFixed(2);
+  // re-bucket everything from stored scores, no re-inference needed
+  for (const p of photos.values()){
+    if (p.auto || p.scores.length){ p.tray = classify(p.scores); placeCard(p); }
+  }
+  refreshCounts();
+});
+
+document.querySelectorAll('[data-dl]').forEach(b =>
+  b.addEventListener('click', () => downloadZip(b.dataset.dl)));
+
+// dropzone highlight
+const dz = $('dropzone');
+['dragenter','dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('drag'); }));
+['dragleave','drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('drag'); }));
+dz.addEventListener('drop', e => { if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
+
+// tray drop targets (for moving cards between trays)
+document.querySelectorAll('.tray').forEach(tray => {
+  const t = tray.dataset.tray;
+  tray.addEventListener('dragover', e => { e.preventDefault(); tray.classList.add('drag-over'); });
+  tray.addEventListener('dragleave', () => tray.classList.remove('drag-over'));
+  tray.addEventListener('drop', e => {
+    e.preventDefault(); tray.classList.remove('drag-over');
+    const id = parseInt(e.dataTransfer.getData('text/plain'), 10);
+    if (id) moveTo(id, t);
+  });
+});
+
+// whole-window drop so you don't have to aim at the dropzone
+['dragover','drop'].forEach(ev => window.addEventListener(ev, e => e.preventDefault()));
+
+refreshCounts();
+bootDetector();
+</script>
+</body>
+</html>
