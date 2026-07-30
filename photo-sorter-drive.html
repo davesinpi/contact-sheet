@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contact Sheet — sort photos by people</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0e1316;--panel:#151d21;--panel-2:#1b262b;--line:#26343b;
+    --ink:#eaf1f4;--muted:#8496a0;--solo:#6fb7d8;--group:#e6a24d;--none:#6d7d85;
+    --danger:#d97b6c;--drive:#8bd48b;--radius:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:"Space Grotesk",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;min-height:100vh;line-height:1.5;position:relative}
+  /* signature: faint light-table texture */
+  body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:2;
+    background:repeating-linear-gradient(0deg,rgba(255,255,255,.016) 0 1px,transparent 1px 3px);
+    mix-blend-mode:overlay;opacity:.5}
+  .wrap{max-width:1280px;margin:0 auto;padding:28px 22px 90px;position:relative;z-index:1}
+
+  header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;
+    gap:18px;padding-bottom:18px;border-bottom:1px solid var(--line)}
+  .title-block h1{font-size:clamp(26px,4vw,40px);font-weight:700;letter-spacing:-0.02em;margin:0}
+  .title-block p{margin:6px 0 0;color:var(--muted);max-width:54ch;font-size:14.5px}
+  .readout{font-family:"Space Mono",monospace;font-size:12px;color:var(--muted);
+    border:1px solid var(--line);border-radius:6px;padding:9px 12px;background:var(--panel);white-space:nowrap}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;vertical-align:middle;background:var(--muted)}
+  .dot.ok{background:var(--solo)}.dot.warn{background:var(--group)}.dot.err{background:var(--danger)}
+  .dot.busy{background:var(--group);animation:pulse 1s infinite ease-in-out}
+  @keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+
+  details.drive{margin-top:18px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);overflow:hidden}
+  details.drive>summary{cursor:pointer;list-style:none;padding:13px 16px;font-weight:500;font-size:14px;
+    display:flex;align-items:center;gap:9px;user-select:none;transition:background .15s}
+  details.drive>summary:hover{background:var(--panel-2)}
+  details.drive>summary::-webkit-details-marker{display:none}
+  details.drive>summary .chev{margin-left:auto;color:var(--muted);font-family:"Space Mono",monospace;font-size:12px}
+  details.drive[open]>summary{border-bottom:1px solid var(--line)}
+  .drive-dot{width:9px;height:9px;border-radius:2px;background:var(--drive)}
+  .drive-body{padding:16px}
+  .drive-body p.hint{margin:0 0 14px;font-size:13px;color:var(--muted);font-family:"Space Mono",monospace;line-height:1.7}
+  .drive-body a{color:var(--solo)}
+  .field-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field label{font-size:11px;font-family:"Space Mono",monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .field input{font-family:"Space Mono",monospace;font-size:12px;background:var(--bg);color:var(--ink);
+    border:1px solid var(--line);border-radius:7px;padding:9px 10px;transition:border-color .15s}
+  .field input:focus{outline:2px solid var(--solo);outline-offset:1px;border-color:var(--solo)}
+  .drive-actions{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
+  .drive-status{font-family:"Space Mono",monospace;font-size:12px;color:var(--muted)}
+
+  .controls{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin:22px 0 0}
+  .btn{font-family:inherit;font-size:14px;font-weight:500;color:var(--ink);background:var(--panel-2);
+    border:1px solid var(--line);border-radius:8px;padding:10px 16px;cursor:pointer;
+    transition:border-color .15s,background .15s,transform .06s,box-shadow .15s}
+  .btn:hover{border-color:var(--solo)}
+  .btn:active{transform:translateY(1px)}
+  .btn:focus-visible{outline:2px solid var(--solo);outline-offset:2px}
+  .btn.primary{background:var(--solo);color:#062029;border-color:var(--solo);font-weight:700}
+  .btn.primary:hover{filter:brightness(1.08);box-shadow:0 4px 16px rgba(111,183,216,.22)}
+  .btn.drive{background:var(--drive);color:#062909;border-color:var(--drive);font-weight:700}
+  .btn.drive:hover{filter:brightness(1.08);box-shadow:0 4px 16px rgba(139,212,139,.2)}
+  .btn.ghost{background:transparent}
+  .btn:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+  .btn.danger:hover{border-color:var(--danger)}
+  .slider-wrap{display:flex;align-items:center;gap:10px;font-family:"Space Mono",monospace;
+    font-size:12px;color:var(--muted);margin-left:auto}
+  .slider-wrap input[type=range]{accent-color:var(--solo);width:120px}
+  .slider-wrap b{color:var(--ink)}
+
+  .progress{height:3px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:12px;opacity:0;transition:opacity .25s}
+  .progress.active{opacity:1}
+  .progress-fill{height:100%;width:0;background:linear-gradient(90deg,var(--solo),var(--group));transition:width .25s ease}
+
+  .dropzone{margin-top:14px;border:1.5px dashed var(--line);border-radius:var(--radius);
+    padding:30px;text-align:center;color:var(--muted);cursor:pointer;
+    transition:border-color .15s,background .15s;background:rgba(111,183,216,0.02)}
+  .dropzone:hover,.dropzone.drag{border-color:var(--solo);background:rgba(111,183,216,0.07);color:var(--ink)}
+  .dropzone.drag{transform:scale(1.005)}
+  .dropzone strong{color:var(--ink);font-weight:700}
+  .dropzone .sub{font-size:13px;margin-top:6px}
+
+  .trays{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:22px}
+  .tray{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    display:flex;flex-direction:column;min-height:220px;transition:border-color .15s,background .15s,box-shadow .15s}
+  .tray.drag-over{border-color:var(--solo);background:var(--panel-2);box-shadow:inset 0 0 0 1px var(--solo)}
+  .tray-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .tray-name{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px}
+  .tray-name .swatch{width:9px;height:9px;border-radius:2px}
+  .tray[data-tray=solo] .swatch{background:var(--solo)}
+  .tray[data-tray=group] .swatch{background:var(--group)}
+  .tray[data-tray=none] .swatch{background:var(--none)}
+  .tray-count{font-family:"Space Mono",monospace;font-size:13px;color:var(--muted);display:inline-block}
+  .tray-count.bump{animation:countPulse .42s ease}
+  @keyframes countPulse{0%{transform:scale(1)}35%{transform:scale(1.3);color:var(--ink)}100%{transform:scale(1)}}
+  .tray-body{padding:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));
+    gap:12px;align-content:start;flex:1}
+  .tray-empty{grid-column:1/-1;color:var(--muted);font-size:12.5px;text-align:center;
+    padding:24px 8px;font-family:"Space Mono",monospace;display:flex;flex-direction:column;align-items:center;gap:9px;opacity:.75}
+  .tray-empty svg{opacity:.6}
+  .dl-row{padding:12px 16px;border-top:1px solid var(--line)}
+  .dl-row .btn{width:100%;font-size:13px;padding:8px}
+
+  .card{position:relative;border-radius:8px;overflow:hidden;background:#000;aspect-ratio:1/1;
+    cursor:grab;border:1px solid var(--line);animation:cardIn .4s cubic-bezier(.2,.7,.2,1) both}
+  @keyframes cardIn{from{opacity:0;transform:translateY(9px) scale(.95)}to{opacity:1;transform:none}}
+  .card:active{cursor:grabbing}
+  .card:hover{border-color:var(--muted)}
+  .card img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .3s ease}
+  .card:hover img{transform:scale(1.05)}
+  .card.dragging{opacity:.35;transform:scale(.95)}
+  .badge{position:absolute;top:6px;left:6px;font-family:"Space Mono",monospace;font-size:11px;
+    font-weight:700;padding:2px 7px;border-radius:5px;background:rgba(6,20,26,.82);color:var(--ink);
+    backdrop-filter:blur(2px);border:1px solid rgba(255,255,255,.12);z-index:2}
+  .badge.solo{color:var(--solo)}.badge.group{color:var(--group)}.badge.none{color:var(--none)}.badge.pending{color:var(--muted)}
+  .src-tag{position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--drive);
+    box-shadow:0 0 0 2px rgba(6,20,26,.7);z-index:2}
+  .card-actions{position:absolute;left:0;right:0;bottom:0;display:flex;opacity:0;transition:opacity .15s;
+    background:linear-gradient(transparent,rgba(6,20,26,.92));z-index:2}
+  .card:hover .card-actions,.card:focus-within .card-actions{opacity:1}
+  .card-actions button{flex:1;font-family:"Space Mono",monospace;font-size:10px;font-weight:700;
+    background:transparent;border:none;color:var(--muted);padding:6px 0;cursor:pointer;border-top:1px solid rgba(255,255,255,.08)}
+  .card-actions button:hover{color:var(--ink);background:rgba(255,255,255,.07)}
+  .card-actions button[data-to=solo]:hover{color:var(--solo)}
+  .card-actions button[data-to=group]:hover{color:var(--group)}
+  .card-actions button[data-to=none]:hover{color:var(--none)}
+  .card-actions button.active{color:var(--ink)}
+
+  .save-row{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:18px}
+  .note{margin-top:24px;font-size:12.5px;color:var(--muted);font-family:"Space Mono",monospace;line-height:1.7}
+  .note code{color:var(--ink)}
+
+  /* toasts */
+  .toasts{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:10px;z-index:9999}
+  .toast{background:var(--panel-2);border:1px solid var(--line);border-left:3px solid var(--solo);
+    border-radius:8px;padding:11px 14px;font-size:13px;color:var(--ink);max-width:330px;
+    box-shadow:0 10px 28px rgba(0,0,0,.4);animation:toastIn .3s ease both}
+  .toast.ok{border-left-color:var(--drive)}.toast.err{border-left-color:var(--danger)}.toast.info{border-left-color:var(--solo)}
+  .toast.leaving{animation:toastOut .3s ease forwards}
+  @keyframes toastIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
+  @keyframes toastOut{to{opacity:0;transform:translateX(14px)}}
+
+  @media (max-width:820px){.trays{grid-template-columns:1fr}.slider-wrap{margin-left:0;width:100%}.field-row{grid-template-columns:1fr}}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.card img{transform:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="title-block">
+      <h1>Contact Sheet</h1>
+      <p>Sort photos by how many people are in each one. Pull them from your computer or from Google Drive, and save the sorted sets back to Drive. Detection runs in your browser, so the images stay on your machine.</p>
+    </div>
+    <div class="readout"><span class="dot" id="statusDot"></span><span id="statusText">Loading detector…</span></div>
+  </header>
+
+  <details class="drive">
+    <summary><span class="drive-dot"></span> Google Drive <span class="chev">set up ▸</span></summary>
+    <div class="drive-body">
+      <p class="hint">
+        One-time setup. In the <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud console</a>: create a project, enable the <b>Google Picker API</b> and <b>Google Drive API</b>, then under <b>Credentials</b> make an <b>API key</b> and an <b>OAuth client ID</b> of type <b>Web application</b>. Add the address you serve this page from (for example <code>http://localhost:8000</code>) to that client's <b>Authorised JavaScript origins</b>. The <b>project number</b> is under IAM &amp; Admin → Settings. Paste the three values below. They are stored only in this browser.
+      </p>
+      <div class="field-row">
+        <div class="field"><label for="cfgClient">OAuth client ID</label><input id="cfgClient" placeholder="xxxxx.apps.googleusercontent.com" autocomplete="off"></div>
+        <div class="field"><label for="cfgKey">API key</label><input id="cfgKey" placeholder="AIza…" autocomplete="off"></div>
+        <div class="field"><label for="cfgApp">Project number</label><input id="cfgApp" placeholder="123456789012" autocomplete="off"></div>
+      </div>
+      <div class="drive-actions">
+        <button class="btn primary" id="cfgSave">Save credentials</button>
+        <button class="btn ghost" id="cfgClear">Forget</button>
+        <span class="drive-status" id="driveStatus">Not connected</span>
+      </div>
+    </div>
+  </details>
+
+  <div class="controls">
+    <button class="btn primary" id="pickBtn">Add photos</button>
+    <button class="btn drive" id="driveOpenBtn" disabled>Open from Drive</button>
+    <button class="btn ghost" id="resortBtn" disabled>Re-sort automatically</button>
+    <button class="btn ghost danger" id="clearBtn" disabled>Clear all</button>
+    <input type="file" id="fileInput" accept="image/*" multiple hidden>
+    <div class="slider-wrap">
+      <label for="sens">sensitivity</label>
+      <input type="range" id="sens" min="10" max="80" value="45">
+      <b id="sensVal">0.45</b>
+    </div>
+  </div>
+  <div class="progress" id="progress"><div class="progress-fill" id="progressFill"></div></div>
+
+  <div class="dropzone" id="dropzone">
+    <strong>Drop photos here</strong> or click to browse &nbsp;·&nbsp; or use <strong>Open from Drive</strong>
+    <div class="sub">JPG, PNG, WebP, GIF</div>
+  </div>
+
+  <div class="trays">
+    <section class="tray" data-tray="solo" id="tray-solo">
+      <div class="tray-head"><div class="tray-name"><span class="swatch"></span>Solo</div><div class="tray-count" id="count-solo">0</div></div>
+      <div class="tray-body" id="body-solo"></div>
+      <div class="dl-row"><button class="btn ghost" data-dl="solo" disabled>Download .zip</button></div>
+    </section>
+    <section class="tray" data-tray="group" id="tray-group">
+      <div class="tray-head"><div class="tray-name"><span class="swatch"></span>Group</div><div class="tray-count" id="count-group">0</div></div>
+      <div class="tray-body" id="body-group"></div>
+      <div class="dl-row"><button class="btn ghost" data-dl="group" disabled>Download .zip</button></div>
+    </section>
+    <section class="tray" data-tray="none" id="tray-none">
+      <div class="tray-head"><div class="tray-name"><span class="swatch"></span>No people</div><div class="tray-count" id="count-none">0</div></div>
+      <div class="tray-body" id="body-none"></div>
+      <div class="dl-row"><button class="btn ghost" data-dl="none" disabled>Download .zip</button></div>
+    </section>
+  </div>
+
+  <div class="save-row">
+    <button class="btn drive" id="driveSaveBtn" disabled>Save sorted folders to Drive</button>
+    <span class="drive-status" id="saveStatus"></span>
+  </div>
+
+  <p class="note">
+    A small green dot marks a photo that came from Drive. Wrong guess? Drag any photo between trays or use the hover buttons. Saving to Drive makes copies inside a new <code>Sorted photos</code> folder, so your originals stay where they are.
+  </p>
+</div>
+
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+/* ===================== helpers ===================== */
+const $ = id => document.getElementById(id);
+const statusDot=$('statusDot'), statusText=$('statusText');
+function setStatus(t,k){statusText.textContent=t;statusDot.className='dot'+(k?' '+k:'')}
+function escapeHtml(s){return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function loadScript(urls){return new Promise((res,rej)=>{let i=0;const t=()=>{if(i>=urls.length)return rej(new Error('all sources failed'));
+  const s=document.createElement('script');s.src=urls[i++];s.onload=()=>res();s.onerror=()=>{s.remove();t()};document.head.appendChild(s)};t()})}
+function loadScriptCb(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.async=true;s.defer=true;s.src=src;s.onload=()=>res();s.onerror=()=>rej(new Error('failed '+src));document.head.appendChild(s)})}
+const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
+
+function toast(msg,kind){
+  const box=$('toasts');const el=document.createElement('div');
+  el.className='toast '+(kind||'info');el.textContent=msg;box.appendChild(el);
+  setTimeout(()=>{el.classList.add('leaving');setTimeout(()=>el.remove(),320)},kind==='err'?5200:3400);
+}
+function setProgress(done,total){
+  const p=$('progress'),f=$('progressFill');
+  if(total<=0||done>=total){p.classList.remove('active');f.style.width='0%';return}
+  p.classList.add('active');f.style.width=Math.round(done/total*100)+'%';
+}
+
+/* ===================== state ===================== */
+let model=null, threshold=0.45, nextId=1, analysing=false;
+const photos=new Map();   // id -> {id,name,file,url,scores:[],tray,auto,fromDrive,el}
+
+/* ===================== detector ===================== */
+async function bootDetector(){
+  setStatus('Loading detector…','busy');
+  try{
+    await loadScript(['https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.22.0/tf.min.js',
+      'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js',
+      'https://unpkg.com/@tensorflow/tfjs@4.22.0/dist/tf.min.js']);
+    await loadScript(['https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js',
+      'https://unpkg.com/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/tensorflow-models-coco-ssd/2.2.3/coco-ssd.min.js']);
+    model=await cocoSsd.load({base:'lite_mobilenet_v2'});
+    setStatus('Detector ready','ok');
+    if(photos.size)analyseAll();
+  }catch(e){
+    model=null;setStatus('Manual mode — auto-detect off','err');
+    toast('Auto-detect could not load. You can still sort by hand and use Drive.','info');
+  }
+  updateControls();
+}
+function classify(scores){const n=scores.filter(s=>s>=threshold).length;return n===0?'none':n===1?'solo':'group'}
+
+/* ===================== ingestion ===================== */
+function ingestFiles(arr,fromDrive){
+  const imgs=arr.filter(f=>f&&typeof f.type==='string'&&f.type.startsWith('image/'));
+  if(!imgs.length){if(arr.length)toast('Those files were not images.','err');return []}
+  const added=[];let i=0;
+  for(const file of imgs){
+    try{
+      const id=nextId++;const url=URL.createObjectURL(file);
+      const p={id,name:file.name,file,url,scores:[],tray:'none',auto:false,fromDrive:!!fromDrive,el:null};
+      photos.set(id,p);renderCard(p);
+      p.el.style.animationDelay=(i++*35)+'ms';
+      placeCard(p);added.push(p);
+    }catch(err){console.error('ingest failed',err)}
+  }
+  refreshCounts();updateControls();
+  return added;
+}
+async function addLocal(fileList){
+  const added=ingestFiles([...fileList],false);
+  if(added.length)toast(`Added ${added.length} photo${added.length>1?'s':''}.`,'ok');
+  if(model)await analyseAll();
+}
+
+async function analyseAll(){
+  if(!model||analysing)return;
+  analysing=true;
+  const pending=[...photos.values()].filter(p=>!p.auto);
+  let done=0;
+  for(const p of pending){
+    setStatus(`Analysing ${done+1} / ${pending.length}…`,'busy');
+    setProgress(done,pending.length);
+    try{const img=await loadImage(p.url);const preds=await model.detect(img,20);
+      p.scores=preds.filter(x=>x.class==='person').map(x=>x.score);}
+    catch(e){p.scores=[]}
+    p.auto=true;p.tray=classify(p.scores);placeCard(p);updateCard(p);refreshCounts();
+    done++;setProgress(done,pending.length);
+    await new Promise(r=>setTimeout(r,0));
+  }
+  analysing=false;setProgress(1,1);
+  setStatus(model?'Detector ready':'Manual mode',model?'ok':'err');updateControls();
+}
+function loadImage(src){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=src})}
+
+/* ===================== rendering (element refs, not id lookups) ===================== */
+function renderCard(p){
+  const card=document.createElement('div');
+  card.className='card';card.id='card-'+p.id;card.draggable=true;
+  card.innerHTML=`<span class="badge pending">…</span>
+    ${p.fromDrive?'<span class="src-tag" title="from Google Drive"></span>':''}
+    <img src="${p.url}" alt="${escapeHtml(p.name)}" loading="lazy">
+    <div class="card-actions">
+      <button data-to="solo">solo</button><button data-to="group">group</button><button data-to="none">none</button>
+    </div>`;
+  card.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',String(p.id));card.classList.add('dragging')});
+  card.addEventListener('dragend',()=>card.classList.remove('dragging'));
+  card.querySelectorAll('.card-actions button').forEach(b=>b.addEventListener('click',()=>moveTo(p.id,b.dataset.to)));
+  p.el=card;
+  return card;
+}
+function updateCard(p){
+  if(!p.el)return;
+  const badge=p.el.querySelector('.badge');if(!badge)return;
+  const n=p.scores.filter(s=>s>=threshold).length;
+  if(!p.auto&&model){badge.textContent='…';badge.className='badge pending';return}
+  badge.textContent=String(n);badge.className='badge '+p.tray;
+  p.el.querySelectorAll('.card-actions button').forEach(b=>b.classList.toggle('active',b.dataset.to===p.tray));
+}
+function placeCard(p){
+  if(!p.el)return;
+  const body=$('body-'+p.tray);
+  const empty=body.querySelector('.tray-empty');if(empty)empty.remove();
+  body.appendChild(p.el);
+  updateCard(p);
+}
+function moveTo(id,tray){const p=photos.get(id);if(!p)return;p.tray=tray;placeCard(p);refreshCounts()}
+
+const EMPTY={solo:'one person',group:'two or more people',none:'nobody detected'};
+function emptyGlyph(){return '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17.5" cy="9" r="2" opacity=".5"/></svg>'}
+function refreshCounts(){
+  for(const t of ['solo','group','none']){
+    const body=$('body-'+t);const cards=body.querySelectorAll('.card').length;
+    const el=$('count-'+t);
+    if(el.textContent!==String(cards)){el.textContent=cards;el.classList.remove('bump');void el.offsetWidth;el.classList.add('bump')}
+    if(cards===0&&!body.querySelector('.tray-empty')){
+      const d=document.createElement('div');d.className='tray-empty';
+      d.innerHTML=emptyGlyph()+'<span>'+EMPTY[t]+'</span>';body.appendChild(d);
+    }
+    document.querySelector(`[data-dl="${t}"]`).disabled=cards===0;
+  }
+  $('driveSaveBtn').disabled=!(photos.size>0&&driveReady());
+}
+function updateControls(){
+  const has=photos.size>0;
+  $('clearBtn').disabled=!has;
+  $('resortBtn').disabled=!has||!model;
+  $('driveOpenBtn').disabled=!driveReady();
+  $('driveSaveBtn').disabled=!(has&&driveReady());
+}
+
+/* ===================== downloads ===================== */
+async function downloadZip(tray){
+  const items=[...photos.values()].filter(p=>p.tray===tray);if(!items.length)return;
+  const zip=new JSZip(),used={};
+  for(const p of items){let name=p.name||('photo-'+p.id);
+    if(used[name]){const d=name.lastIndexOf('.');name=d>0?name.slice(0,d)+'-'+p.id+name.slice(d):name+'-'+p.id}
+    used[name]=true;zip.file(name,p.file)}
+  const blob=await zip.generateAsync({type:'blob'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=tray+'-photos.zip';a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  toast(`Downloaded ${items.length} ${tray} photo${items.length>1?'s':''}.`,'ok');
+}
+
+/* ===================== Google Drive ===================== */
+let driveCfg={clientId:'',apiKey:'',appId:''};
+let gapiReady=false,gisReady=false,tokenClient=null,accessToken=null,googleLoading=null;
+function driveReady(){return !!(driveCfg.clientId&&driveCfg.apiKey&&driveCfg.appId)}
+const SCOPE='https://www.googleapis.com/auth/drive.file';
+
+function loadCfg(){
+  const raw=store.get('driveCfg');if(raw){try{driveCfg=JSON.parse(raw)}catch(e){}}
+  $('cfgClient').value=driveCfg.clientId||'';$('cfgKey').value=driveCfg.apiKey||'';$('cfgApp').value=driveCfg.appId||'';
+  $('driveStatus').textContent=driveReady()?'Credentials saved — ready to connect':'Not connected';
+}
+function saveCfg(){
+  driveCfg={clientId:$('cfgClient').value.trim(),apiKey:$('cfgKey').value.trim(),appId:$('cfgApp').value.trim()};
+  store.set('driveCfg',JSON.stringify(driveCfg));
+  gapiReady=gisReady=false;tokenClient=null;accessToken=null;googleLoading=null;
+  const ok=driveReady();
+  $('driveStatus').textContent=ok?'Credentials saved — ready to connect':'Fill in all three fields';
+  toast(ok?'Drive credentials saved.':'Fill in all three fields.',ok?'ok':'err');
+  updateControls();
+}
+function clearCfg(){driveCfg={clientId:'',apiKey:'',appId:''};store.del('driveCfg');
+  $('cfgClient').value=$('cfgKey').value=$('cfgApp').value='';accessToken=null;
+  $('driveStatus').textContent='Not connected';updateControls();toast('Drive credentials forgotten.','info')}
+
+async function ensureGoogle(){
+  if(!driveReady())throw new Error('missing credentials');
+  if(gapiReady&&gisReady)return;
+  if(!googleLoading){
+    googleLoading=(async()=>{
+      await loadScriptCb('https://apis.google.com/js/api.js');
+      await new Promise(res=>gapi.load('picker',res));gapiReady=true;
+      await loadScriptCb('https://accounts.google.com/gsi/client');
+      tokenClient=google.accounts.oauth2.initTokenClient({client_id:driveCfg.clientId,scope:SCOPE,callback:()=>{}});
+      gisReady=true;
+    })();
+  }
+  await googleLoading;
+}
+function getToken(){
+  return new Promise((resolve,reject)=>{
+    if(!tokenClient)return reject(new Error('not initialised'));
+    tokenClient.callback=(resp)=>{if(resp&&resp.error)return reject(resp);accessToken=resp.access_token;resolve(accessToken)};
+    tokenClient.requestAccessToken({prompt:accessToken?'':'consent'});
+  });
+}
+async function openPicker(){
+  try{
+    $('driveStatus').textContent='Connecting…';
+    await ensureGoogle();await getToken();
+    $('driveStatus').textContent='Choose photos in the picker window';
+    const view=new google.picker.DocsView(google.picker.ViewId.DOCS_IMAGES)
+      .setIncludeFolders(true).setSelectFolderEnabled(false).setMode(google.picker.DocsViewMode.GRID);
+    const picker=new google.picker.PickerBuilder()
+      .setOAuthToken(accessToken).setDeveloperKey(driveCfg.apiKey).setAppId(driveCfg.appId)
+      .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
+      .addView(view).setCallback(onPicked).build();
+    picker.setVisible(true);
+  }catch(err){
+    console.error(err);
+    $('driveStatus').textContent='Connection failed';
+    toast('Drive connection failed. Check the credentials and that this origin is authorised.','err');
+  }
+}
+async function onPicked(data){
+  if(data.action!==google.picker.Action.PICKED){
+    if(data.action===google.picker.Action.CANCEL)$('driveStatus').textContent='Connected';
+    return;
+  }
+  const docs=data.docs||[];
+  const files=[];let got=0;
+  for(const d of docs){
+    $('driveStatus').textContent=`Downloading ${got+1} / ${docs.length}…`;
+    setProgress(got,docs.length);
+    try{
+      const res=await fetch(`https://www.googleapis.com/drive/v3/files/${d.id}?alt=media`,
+        {headers:{Authorization:'Bearer '+accessToken}});
+      if(!res.ok)throw new Error('http '+res.status);
+      const blob=await res.blob();
+      files.push(new File([blob],d.name||('drive-'+d.id),{type:blob.type||d.mimeType||'image/jpeg'}));
+    }catch(e){console.error('download failed',d.id,e)}
+    got++;setProgress(got,docs.length);
+  }
+  setProgress(1,1);
+  $('driveStatus').textContent=`Imported ${files.length} from Drive`;
+  const added=ingestFiles(files,true);
+  toast(`Imported ${added.length} photo${added.length===1?'':'s'} from Drive.`,'ok');
+  if(model)await analyseAll();
+}
+async function driveCreateFolder(name,parentId){
+  const meta={name,mimeType:'application/vnd.google-apps.folder'};if(parentId)meta.parents=[parentId];
+  const res=await fetch('https://www.googleapis.com/drive/v3/files?fields=id',
+    {method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify(meta)});
+  if(!res.ok)throw new Error('folder create failed');return (await res.json()).id;
+}
+async function driveUpload(file,parentId){
+  const meta={name:file.name,parents:[parentId]};
+  const form=new FormData();
+  form.append('metadata',new Blob([JSON.stringify(meta)],{type:'application/json'}));
+  form.append('file',file);
+  const res=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
+    {method:'POST',headers:{Authorization:'Bearer '+accessToken},body:form});
+  return res.ok;
+}
+async function saveToDrive(){
+  if(!photos.size)return;
+  const btn=$('driveSaveBtn');btn.disabled=true;
+  try{
+    await ensureGoogle();await getToken();
+    $('saveStatus').textContent='Creating folders…';
+    const stamp=new Date().toISOString().slice(0,16).replace('T',' ');
+    const root=await driveCreateFolder('Sorted photos '+stamp,null);
+    const folders={};
+    for(const [t,label] of [['solo','Solo'],['group','Group'],['none','No people']]){
+      if([...photos.values()].some(p=>p.tray===t))folders[t]=await driveCreateFolder(label,root);
+    }
+    const all=[...photos.values()];let done=0,failed=0;
+    for(const p of all){
+      $('saveStatus').textContent=`Uploading ${done+1} / ${all.length}…`;setProgress(done,all.length);
+      const ok=await driveUpload(p.file,folders[p.tray]);if(!ok)failed++;done++;setProgress(done,all.length);
+    }
+    setProgress(1,1);
+    const label=`"Sorted photos ${stamp}"`;
+    $('saveStatus').textContent=failed?`Done, ${failed} failed. Folder: ${label}`:`Saved to ${label}`;
+    toast(failed?`Saved with ${failed} failed upload${failed>1?'s':''}.`:`Saved to Drive → ${label}.`,failed?'info':'ok');
+  }catch(err){
+    console.error(err);$('saveStatus').textContent='Save failed';
+    toast('Save failed. Check that the Drive API is enabled and you granted access.','err');
+  }finally{btn.disabled=false}
+}
+
+/* ===================== wiring ===================== */
+$('pickBtn').addEventListener('click',()=>$('fileInput').click());
+$('dropzone').addEventListener('click',()=>$('fileInput').click());
+$('fileInput').addEventListener('change',e=>{addLocal(e.target.files);e.target.value=''});
+$('clearBtn').addEventListener('click',()=>{for(const p of photos.values())URL.revokeObjectURL(p.url);photos.clear();
+  for(const t of ['solo','group','none'])$('body-'+t).innerHTML='';refreshCounts();updateControls();$('saveStatus').textContent=''});
+$('resortBtn').addEventListener('click',()=>{for(const p of photos.values())p.auto=false;analyseAll()});
+$('sens').addEventListener('input',e=>{threshold=e.target.value/100;$('sensVal').textContent=threshold.toFixed(2);
+  for(const p of photos.values()){if(p.auto||p.scores.length){p.tray=classify(p.scores);placeCard(p)}}refreshCounts()});
+document.querySelectorAll('[data-dl]').forEach(b=>b.addEventListener('click',()=>downloadZip(b.dataset.dl)));
+$('cfgSave').addEventListener('click',saveCfg);
+$('cfgClear').addEventListener('click',clearCfg);
+$('driveOpenBtn').addEventListener('click',openPicker);
+$('driveSaveBtn').addEventListener('click',saveToDrive);
+
+const dz=$('dropzone');
+['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag')}));
+['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag')}));
+dz.addEventListener('drop',e=>{if(e.dataTransfer.files.length)addLocal(e.dataTransfer.files)});
+document.querySelectorAll('.tray').forEach(tray=>{const t=tray.dataset.tray;
+  tray.addEventListener('dragover',e=>{e.preventDefault();tray.classList.add('drag-over')});
+  tray.addEventListener('dragleave',()=>tray.classList.remove('drag-over'));
+  tray.addEventListener('drop',e=>{e.preventDefault();tray.classList.remove('drag-over');
+    const id=parseInt(e.dataTransfer.getData('text/plain'),10);if(id)moveTo(id,t)})});
+['dragover','drop'].forEach(ev=>window.addEventListener(ev,e=>e.preventDefault()));
+
+loadCfg();refreshCounts();bootDetector();
+</script>
+</body>
+</html>
