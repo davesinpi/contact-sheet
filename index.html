@@ -1,0 +1,1395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contact Sheet — organise photos by people</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0e1316;--panel:#151d21;--panel-2:#1b262b;--line:#26343b;
+    --ink:#eaf1f4;--muted:#8496a0;--solo:#6fb7d8;--group:#e6a24d;--none:#6d7d85;
+    --danger:#d97b6c;--drive:#8bd48b;--radius:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:"Space Grotesk",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;min-height:100vh;line-height:1.5;position:relative}
+  body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:2;
+    background:repeating-linear-gradient(0deg,rgba(255,255,255,.016) 0 1px,transparent 1px 3px);
+    mix-blend-mode:overlay;opacity:.5}
+  .wrap{max-width:1280px;margin:0 auto;padding:28px 22px 90px;position:relative;z-index:1}
+  header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;
+    gap:18px;padding-bottom:18px;border-bottom:1px solid var(--line)}
+  .title-block h1{font-size:clamp(26px,4vw,40px);font-weight:700;letter-spacing:-0.02em;margin:0}
+  .title-block p{margin:6px 0 0;color:var(--muted);max-width:56ch;font-size:14.5px}
+  .readouts{display:flex;flex-direction:column;gap:7px;align-items:flex-end}
+  .readout{font-family:"Space Mono",monospace;font-size:12px;color:var(--muted);
+    border:1px solid var(--line);border-radius:6px;padding:9px 12px;background:var(--panel);white-space:nowrap}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;vertical-align:middle;background:var(--muted)}
+  .dot.ok{background:var(--solo)}.dot.err{background:var(--danger)}.dot.save{background:var(--drive)}
+  .dot.busy{background:var(--group);animation:pulse 1s infinite ease-in-out}
+  @keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+  details.drive{margin-top:18px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);overflow:hidden}
+  details.drive>summary{cursor:pointer;list-style:none;padding:13px 16px;font-weight:500;font-size:14px;
+    display:flex;align-items:center;gap:9px;user-select:none;transition:background .15s}
+  details.drive>summary:hover{background:var(--panel-2)}
+  details.drive>summary::-webkit-details-marker{display:none}
+  details.drive>summary .chev{margin-left:auto;color:var(--muted);font-family:"Space Mono",monospace;font-size:12px}
+  details.drive[open]>summary{border-bottom:1px solid var(--line)}
+  .drive-dot{width:9px;height:9px;border-radius:2px;background:var(--drive)}
+  .drive-body{padding:16px}
+  .drive-body p.hint{margin:0 0 14px;font-size:13px;color:var(--muted);font-family:"Space Mono",monospace;line-height:1.7}
+  .drive-body a{color:var(--solo)}
+  .field-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field label{font-size:11px;font-family:"Space Mono",monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .field input{font-family:"Space Mono",monospace;font-size:12px;background:var(--bg);color:var(--ink);
+    border:1px solid var(--line);border-radius:7px;padding:9px 10px}
+  .field input:focus{outline:2px solid var(--solo);outline-offset:1px;border-color:var(--solo)}
+  .drive-actions{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
+  .drive-status{font-family:"Space Mono",monospace;font-size:12px;color:var(--muted)}
+  .controls{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin:22px 0 0}
+  .btn{font-family:inherit;font-size:14px;font-weight:500;color:var(--ink);background:var(--panel-2);
+    border:1px solid var(--line);border-radius:8px;padding:10px 16px;cursor:pointer;
+    transition:border-color .15s,background .15s,transform .06s,box-shadow .15s}
+  .btn:hover{border-color:var(--solo)}
+  .btn:active{transform:translateY(1px)}
+  .btn:focus-visible{outline:2px solid var(--solo);outline-offset:2px}
+  .btn.primary{background:var(--solo);color:#062029;border-color:var(--solo);font-weight:700}
+  .btn.primary:hover{filter:brightness(1.08);box-shadow:0 4px 16px rgba(111,183,216,.22)}
+  .btn.drive{background:var(--drive);color:#062909;border-color:var(--drive);font-weight:700}
+  .btn.drive:hover{filter:brightness(1.08);box-shadow:0 4px 16px rgba(139,212,139,.2)}
+  .btn.ghost{background:transparent}
+  .btn:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+  .btn.danger:hover{border-color:var(--danger)}
+  .btn.small{font-size:12px;padding:6px 11px}
+  select{font-family:"Space Mono",monospace;font-size:12px;background:var(--panel-2);color:var(--ink);
+    border:1px solid var(--line);border-radius:7px;padding:7px 9px}
+  select:focus{outline:2px solid var(--solo);outline-offset:1px}
+  select.small{font-size:11px;padding:5px 7px}
+  .slider-wrap{display:flex;align-items:center;gap:10px;font-family:"Space Mono",monospace;
+    font-size:12px;color:var(--muted);margin-left:auto}
+  .slider-wrap input[type=range]{accent-color:var(--solo);width:130px}
+  .slider-wrap b{color:var(--ink)}
+  .slider-wrap .ends{font-size:10px;letter-spacing:.03em;text-transform:uppercase;opacity:.7}
+  .slider-wrap .tally{color:var(--solo);font-size:11px;white-space:nowrap}
+  #combineChips{max-height:136px;overflow-y:auto;padding:2px}
+  .progress{height:3px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:12px;opacity:0;transition:opacity .25s}
+  .progress.active{opacity:1}
+  .progress-fill{height:100%;width:0;background:linear-gradient(90deg,var(--solo),var(--group));transition:width .25s ease}
+  .dropzone{margin-top:14px;border:1.5px dashed var(--line);border-radius:var(--radius);
+    padding:30px;text-align:center;color:var(--muted);cursor:pointer;
+    transition:border-color .15s,background .15s;background:rgba(111,183,216,0.02)}
+  .dropzone:hover,.dropzone.drag{border-color:var(--solo);background:rgba(111,183,216,0.07);color:var(--ink)}
+  .dropzone strong{color:var(--ink);font-weight:700}
+  .dropzone .sub{font-size:13px;margin-top:6px}
+  .filterbar{margin-top:20px;padding:13px 16px;border:1px solid var(--line);border-radius:var(--radius);
+    background:var(--panel);display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+  .filterbar .flabel{font-family:"Space Mono",monospace;font-size:12px;color:var(--muted)}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{font-family:inherit;font-size:13px;padding:4px 11px 4px 4px;border-radius:20px;cursor:pointer;
+    background:transparent;color:var(--muted);border:1px solid var(--line);transition:all .15s;
+    display:inline-flex;align-items:center;gap:8px;line-height:1}
+  .chip .face{width:22px;height:22px;border-radius:50%;object-fit:cover;flex:none;
+    background:var(--panel-2);border:1px solid var(--line)}
+  .chip .face.blank{display:flex;align-items:center;justify-content:center;color:var(--muted)}
+  .chip .n{font-family:"Space Mono",monospace;font-size:10px;opacity:.75;padding-left:2px}
+  .chip:hover{color:var(--ink);border-color:var(--muted)}
+  .chip[aria-pressed="true"]{background:var(--solo);color:#062029;border-color:var(--solo);font-weight:700}
+  #combineChips .chip[aria-pressed="true"]{background:var(--group);color:#2a1a05;border-color:var(--group)}
+  .chip:focus-visible{outline:2px solid var(--solo);outline-offset:2px}
+  #library{margin-top:18px;display:flex;flex-direction:column;gap:18px}
+  .person{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    transition:border-color .15s,box-shadow .15s}
+  .person.drag-over{border-color:var(--solo);box-shadow:inset 0 0 0 1px var(--solo)}
+  .person.failed{border-color:rgba(217,123,108,.45)}
+  .person-head{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .avatar{width:44px;height:44px;border-radius:50%;overflow:hidden;background:var(--panel-2);
+    border:1px solid var(--line);flex:none;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+  .avatar img{width:100%;height:100%;object-fit:cover;display:block}
+  .person-name{font-weight:700;font-size:16px;background:transparent;border:1px solid transparent;
+    border-radius:6px;color:var(--ink);font-family:inherit;padding:4px 8px;min-width:60px;max-width:260px}
+  .person-name:hover{border-color:var(--line)}
+  .person-name:focus{outline:none;border-color:var(--solo);background:var(--bg)}
+  .person-meta{font-family:"Space Mono",monospace;font-size:12px;color:var(--muted)}
+  .person-actions{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .person-body{padding:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:12px}
+  .more-row{padding:0 16px 14px;text-align:center}
+  .more-row .btn{width:100%}
+  .card{position:relative;border-radius:8px;overflow:hidden;background:var(--panel-2);aspect-ratio:1/1;
+    cursor:grab;border:1px solid var(--line);animation:cardIn .3s cubic-bezier(.2,.7,.2,1) both}
+  @keyframes cardIn{from{opacity:0;transform:translateY(6px) scale(.97)}to{opacity:1;transform:none}}
+  .card:active{cursor:grabbing}
+  .card:hover{border-color:var(--muted)}
+  .card img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .3s ease}
+  .card:hover img{transform:scale(1.05)}
+  .card.dragging{opacity:.35}
+  .card.pending::after{content:'';position:absolute;inset:0;
+    background:linear-gradient(100deg,transparent 20%,rgba(255,255,255,.06) 50%,transparent 80%);
+    background-size:200% 100%;animation:shimmer 1.3s infinite linear}
+  @keyframes shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+  .facebox{position:absolute;border:1.5px solid var(--solo);border-radius:3px;pointer-events:none;
+    opacity:0;transition:opacity .15s;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
+  .card:hover .facebox{opacity:1}
+  .badge{position:absolute;top:6px;left:6px;font-family:"Space Mono",monospace;font-size:11px;
+    font-weight:700;padding:2px 7px;border-radius:5px;background:rgba(6,20,26,.82);color:var(--ink);
+    backdrop-filter:blur(2px);border:1px solid rgba(255,255,255,.12);z-index:2}
+  .badge.bad{color:var(--danger)}
+  .src-tag{position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--drive);
+    box-shadow:0 0 0 2px rgba(6,20,26,.7);z-index:2}
+  .cached{position:absolute;top:6px;right:16px;font-family:"Space Mono",monospace;font-size:9px;
+    color:var(--drive);z-index:2;opacity:.85}
+  .card-actions{position:absolute;left:0;right:0;bottom:0;display:flex;opacity:0;transition:opacity .15s;
+    background:linear-gradient(transparent,rgba(6,20,26,.92));z-index:3}
+  .card:hover .card-actions,.card:focus-within .card-actions{opacity:1}
+  .card-actions button{flex:1;font-family:"Space Mono",monospace;font-size:10px;font-weight:700;
+    background:transparent;border:none;color:var(--muted);padding:6px 0;cursor:pointer;
+    border-top:1px solid rgba(255,255,255,.08)}
+  .card-actions button:hover{color:var(--danger);background:rgba(255,255,255,.07)}
+  .pcount{position:absolute;right:6px;bottom:6px;font-family:"Space Mono",monospace;font-size:10px;
+    background:rgba(6,20,26,.82);border:1px solid rgba(255,255,255,.12);border-radius:5px;
+    padding:1px 6px;color:var(--muted);z-index:2}
+  .save-row{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:20px}
+  .note{margin-top:24px;font-size:12.5px;color:var(--muted);font-family:"Space Mono",monospace;line-height:1.7}
+  .note code{color:var(--ink)}
+  .toasts{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:10px;z-index:9999}
+  .toast{background:var(--panel-2);border:1px solid var(--line);border-left:3px solid var(--solo);
+    border-radius:8px;padding:11px 14px;font-size:13px;color:var(--ink);max-width:340px;
+    box-shadow:0 10px 28px rgba(0,0,0,.4);animation:toastIn .3s ease both}
+  .toast.ok{border-left-color:var(--drive)}.toast.err{border-left-color:var(--danger)}.toast.info{border-left-color:var(--solo)}
+  .toast.leaving{animation:toastOut .3s ease forwards}
+  .toast{display:flex;align-items:center;gap:12px}
+  .toast .undo{font-family:inherit;font-size:12px;font-weight:700;background:transparent;
+    border:1px solid var(--line);border-radius:6px;color:var(--ink);padding:4px 10px;cursor:pointer;flex:none}
+  .toast .undo:hover{border-color:var(--solo);color:var(--solo)}
+  .empty-state{border:1px dashed var(--line);border-radius:var(--radius);padding:44px 20px;
+    text-align:center;color:var(--muted);font-family:"Space Mono",monospace;font-size:13px;line-height:1.8}
+  .empty-state b{color:var(--ink);font-family:"Space Grotesk",sans-serif;font-size:15px;display:block;margin-bottom:6px}
+  @keyframes toastIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
+  @keyframes toastOut{to{opacity:0;transform:translateX(14px)}}
+  @media (max-width:820px){.slider-wrap{margin-left:0;width:100%}.field-row{grid-template-columns:1fr}
+    .person-actions{flex-wrap:wrap;margin-left:0}.readouts{align-items:flex-start}}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.card img{transform:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="title-block">
+      <h1>Contact Sheet</h1>
+      <p>Organise a photo library by <b>who is in the photos</b>. Faces are detected and matched entirely in your browser, grouped into people you can name, and exported as one folder per person. Your names and corrections are remembered between visits. Nothing leaves your machine.</p>
+    </div>
+    <div class="readouts">
+      <div class="readout"><span class="dot" id="statusDot"></span><span id="statusText">Loading face engine…</span></div>
+      <div class="readout"><span class="dot save" id="saveDot"></span><span id="saveText">Memory off</span></div>
+    </div>
+  </header>
+
+  <details class="drive">
+    <summary><span class="drive-dot"></span> Google Drive <span class="chev">set up ▸</span></summary>
+    <div class="drive-body">
+      <p class="hint">
+        One-time setup. In the <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud console</a>: create a project, enable the <b>Google Picker API</b> and <b>Google Drive API</b>, set the Auth Platform audience to <b>External</b> and add yourself as a test user, then create an <b>API key</b> and a <b>Web application OAuth client ID</b> whose <b>Authorised JavaScript origins</b> include the address you serve this page from. Project number is under IAM &amp; Admin → Settings. Values are stored only in this browser.
+      </p>
+      <div class="field-row">
+        <div class="field"><label for="cfgClient">OAuth client ID</label><input id="cfgClient" placeholder="xxxxx.apps.googleusercontent.com" autocomplete="off"></div>
+        <div class="field"><label for="cfgKey">API key</label><input id="cfgKey" placeholder="AIza…" autocomplete="off"></div>
+        <div class="field"><label for="cfgApp">Project number</label><input id="cfgApp" placeholder="123456789012" autocomplete="off"></div>
+      </div>
+      <div class="drive-actions">
+        <button class="btn primary" id="cfgSave">Save credentials</button>
+        <button class="btn ghost" id="cfgClear">Forget</button>
+        <span class="drive-status" id="driveStatus">Not connected</span>
+      </div>
+    </div>
+  </details>
+
+  <div class="controls">
+    <button class="btn primary" id="pickBtn">Add photos</button>
+    <button class="btn drive" id="driveOpenBtn" disabled>Open from Drive</button>
+    <button class="btn ghost" id="reBtn" disabled>Re-analyse</button>
+    <button class="btn ghost danger" id="clearBtn" disabled>Clear all</button>
+    <button class="btn ghost danger" id="forgetBtn">Forget saved people</button>
+    <label class="drive-status" style="display:flex;align-items:center;gap:7px;cursor:pointer">
+      <input type="checkbox" id="memToggle" checked style="accent-color:var(--solo)"> use saved people
+    </label>
+    <select id="quality" title="Lower settings analyse a smaller image, which is faster but can miss small or distant faces">
+      <option value="fast">Fast</option>
+      <option value="balanced" selected>Balanced</option>
+      <option value="thorough">Thorough</option>
+    </select>
+    <input type="file" id="fileInput" accept="image/*,.heic,.heif" multiple hidden>
+    <div class="slider-wrap">
+      <label for="strict">grouping</label>
+      <span class="ends">stricter</span>
+      <input type="range" id="strict" min="18" max="70" value="45"
+             title="Left: more, smaller groups. Right: fewer, larger groups.">
+      <span class="ends">looser</span>
+      <b id="strictVal">0.45</b>
+      <span class="tally" id="tally"></span>
+    </div>
+  </div>
+  <div class="progress" id="progress"><div class="progress-fill" id="progressFill"></div></div>
+
+  <div class="dropzone" id="dropzone">
+    <strong>Drop photos here</strong> or click to browse &nbsp;·&nbsp; or use <strong>Open from Drive</strong>
+    <div class="sub">JPG, PNG, WebP, GIF — HEIC is converted automatically when possible. Large photos are fine.</div>
+  </div>
+
+  <div class="filterbar" id="filterbar" hidden>
+    <span class="flabel">Show photos with</span>
+    <select id="filterMode"><option value="all">all of</option><option value="any">any of</option></select>
+    <div class="chips" id="chips"></div>
+    <button class="btn ghost small" id="clearFilter" hidden>Clear filter</button>
+  </div>
+
+  <div class="filterbar" id="combinebar" hidden>
+    <span class="flabel">Same person?</span>
+    <div class="chips" id="combineChips"></div>
+    <span class="flabel" id="keepLabel" hidden>keep name</span>
+    <select id="combineKeep" class="small" hidden></select>
+    <button class="btn primary small" id="combineBtn" hidden>Combine</button>
+    <button class="btn ghost small" id="combineAll">Select all</button>
+    <button class="btn ghost small" id="combineClear" hidden>Clear</button>
+  </div>
+
+  <div id="library"></div>
+
+  <div class="save-row">
+    <select id="exportMode" title="How multi-person photos are written to Drive">
+      <option value="shortcuts">Drive shortcuts (one real file)</option>
+      <option value="copies">Full copies in each folder</option>
+    </select>
+    <button class="btn drive" id="driveSaveBtn" disabled>Save people folders to Drive</button>
+    <button class="btn ghost" id="manifestBtn" disabled>Download people.csv</button>
+    <span class="drive-status" id="saveStatus"></span>
+  </div>
+
+  <p class="note">
+    Hover a photo for face boxes and a <code>remove</code> button that takes it out of <em>that person only</em>. Drag a photo onto another person to say they are also in it. If one person is split in two, use <b>Merge into</b>; if two people share a group, use <b>Split</b>. Names, merges, splits and corrections are saved in this browser and reapplied when you add the same photos again, which also skips re-analysing them.
+  </p>
+</div>
+
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+/* ===================== tuning ===================== */
+const THUMB_MAX=340, ANALYSE_MAX=900, FACE_THUMB=88;
+const RENDER_CAP=60, BIG_BATCH=120, YIELD_EVERY=20;
+const DECODE_TIMEOUT=20000, PROCESS_TIMEOUT=45000;
+const QUALITY_MODES={
+  fast:     {analyse:560, input:320, label:'Fast'},
+  balanced: {analyse:800, input:416, label:'Balanced'},
+  thorough: {analyse:1100,input:512, label:'Thorough'}
+};
+let QUALITY=QUALITY_MODES.balanced;
+// Peak memory is now one small bitmap per lane, so a few photos can be in flight
+// at once. Decoding is CPU work and inference is GPU work, so overlapping them wins.
+const CONCURRENCY=Math.max(2,Math.min(4,Math.round((typeof navigator!=='undefined'&&navigator.hardwareConcurrency||4)/2)));
+let lastRate=0;
+const ID_MATCH=0.35;      // centroid distance under which a group may reclaim a known person
+const ID_MARGIN=0.75;     // best match must beat the runner-up by this ratio, else treat as new
+const POOL_DEDUPE=0.15;   // saved people closer than this are the same person, keep one
+const MERGE_FACTOR=0.85;  // the merge pass runs tighter than the slider, because averaging
+                          // shrinks distances between groups relative to distances between faces
+const SPLIT_STEP=0.8;     // each Split press tightens that person's threshold by this factor
+
+/* ===================== helpers ===================== */
+const $=id=>document.getElementById(id);
+const statusDot=$('statusDot'),statusText=$('statusText');
+function setStatus(t,k){statusText.textContent=t;statusDot.className='dot'+(k?' '+k:'')}
+function setSave(t,k){$('saveText').textContent=t;$('saveDot').className='dot '+(k||'save')}
+function escapeHtml(s){return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function loadScript(urls){return new Promise((res,rej)=>{let i=0;const t=()=>{if(i>=urls.length)return rej(new Error('all sources failed'));
+  const s=document.createElement('script');s.src=urls[i++];s.onload=()=>res();s.onerror=()=>{s.remove();t()};document.head.appendChild(s)};t()})}
+function loadScriptCb(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.async=true;s.defer=true;s.src=src;s.onload=()=>res();s.onerror=()=>rej(new Error('failed '+src));document.head.appendChild(s)})}
+const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
+function toast(msg,kind){const box=$('toasts');const el=document.createElement('div');
+  el.className='toast '+(kind||'info');el.textContent=msg;box.appendChild(el);
+  setTimeout(()=>{el.classList.add('leaving');setTimeout(()=>el.remove(),320)},kind==='err'?6000:3200)}
+function toastAction(msg,label,fn,kind){
+  const box=$('toasts');const el=document.createElement('div');
+  el.className='toast '+(kind||'ok');
+  const span=document.createElement('span');span.textContent=msg;
+  const b=document.createElement('button');b.className='undo';b.textContent=label;
+  b.addEventListener('click',()=>{el.remove();fn()});
+  el.appendChild(span);el.appendChild(b);box.appendChild(el);
+  setTimeout(()=>{if(!el.isConnected)return;el.classList.add('leaving');setTimeout(()=>el.remove(),320)},7000);
+}
+function setProgress(done,total){const p=$('progress'),f=$('progressFill');
+  if(total<=0||done>=total){p.classList.remove('active');f.style.width='0%';return}
+  p.classList.add('active');f.style.width=Math.round(done/total*100)+'%'}
+function fmtBytes(n){return n>=1073741824?(n/1073741824).toFixed(1)+' GB':n>=1048576?Math.round(n/1048576)+' MB':Math.round(n/1024)+' KB'}
+const nextFrame=()=>new Promise(r=>setTimeout(r,0));
+function withTimeout(promise,ms,label){let t;
+  return Promise.race([promise,new Promise((_,rej)=>{t=setTimeout(()=>rej(new Error((label||'operation')+' timed out')),ms)})])
+    .finally(()=>clearTimeout(t))}
+
+/* =====================================================================
+   PERSISTENCE
+   IndexedDB when available, an in-memory map otherwise, so the app still
+   runs in private windows or when storage is blocked. Two stores: cached
+   analysis per file, and the small key/value record of people and edits.
+   ===================================================================== */
+const DB={
+  name:'contactsheet',ver:1,db:null,ok:false,
+  mem:{faces:new Map(),kv:new Map()},
+  async open(){
+    if(typeof indexedDB==='undefined'){this.ok=false;return false}
+    try{
+      this.db=await new Promise((res,rej)=>{
+        const r=indexedDB.open(this.name,this.ver);
+        r.onupgradeneeded=()=>{const d=r.result;
+          if(!d.objectStoreNames.contains('faces'))d.createObjectStore('faces');
+          if(!d.objectStoreNames.contains('kv'))d.createObjectStore('kv')};
+        r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);
+        setTimeout(()=>rej(new Error('idb timeout')),4000);
+      });
+      this.ok=true;return true;
+    }catch(e){this.ok=false;return false}
+  },
+  _tx(storeName,mode){return this.db.transaction(storeName,mode).objectStore(storeName)},
+  async get(storeName,key){
+    if(!this.ok)return this.mem[storeName].get(key);
+    try{return await new Promise((res,rej)=>{const r=this._tx(storeName,'readonly').get(key);
+      r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}catch(e){return undefined}
+  },
+  async set(storeName,key,val){
+    if(!this.ok){this.mem[storeName].set(key,val);return true}
+    try{return await new Promise((res,rej)=>{const r=this._tx(storeName,'readwrite').put(val,key);
+      r.onsuccess=()=>res(true);r.onerror=()=>rej(r.error)})}catch(e){return false}
+  },
+  async clearAll(){
+    this.mem.faces.clear();this.mem.kv.clear();
+    if(!this.ok)return true;
+    try{for(const s of ['faces','kv'])await new Promise((res,rej)=>{const r=this._tx(s,'readwrite').clear();
+      r.onsuccess=()=>res(true);r.onerror=()=>rej(r.error)});return true}catch(e){return false}
+  }
+};
+function fileKeyOf(name,size,lastModified,driveId){
+  return driveId?('drive:'+driveId):('f:'+name+'|'+(size||0)+'|'+(lastModified||0));
+}
+let saveTimer=null,savePending=false;
+function scheduleSave(){
+  savePending=true;
+  if(saveTimer)clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{persistState()},400);
+}
+async function persistState(){
+  savePending=false;
+  // Only remember people the user actually invested in: named, combined, split
+  // or hand-corrected. Auto-derived groups are reproducible from the photos, and
+  // storing them just accumulates stale records that later hijack fresh groups.
+  const people=prevClusters.filter(c=>isAnchored(c.id))
+    .map(c=>({id:c.id,name:c.name,centroid:c.centroid}));
+  await DB.set('kv','people',people);
+  await DB.set('kv','manualAdd',[...manualAdd]);
+  await DB.set('kv','manualRemove',[...manualRemove]);
+  await DB.set('kv','merges',[...merges.entries()]);
+  await DB.set('kv','splits',[...splits.entries()]);
+  await DB.set('kv','namedIds',[...namedIds]);
+  await DB.set('kv','nextClusterId',nextClusterId);
+  setSave(`Remembering ${people.length} ${people.length===1?'person':'people'}`,'save');
+}
+async function loadPersisted(){
+  const opened=await DB.open();
+  const people=await DB.get('kv','people');
+  if(Array.isArray(people))prevClusters=people.map(p=>({id:p.id,name:p.name,centroid:p.centroid}));
+  const ma=await DB.get('kv','manualAdd');if(Array.isArray(ma))ma.forEach(k=>manualAdd.add(k));
+  const mr=await DB.get('kv','manualRemove');if(Array.isArray(mr))mr.forEach(k=>manualRemove.add(k));
+  const mg=await DB.get('kv','merges');if(Array.isArray(mg))mg.forEach(([a,b])=>merges.set(Number(a),Number(b)));
+  const sp=await DB.get('kv','splits');if(Array.isArray(sp))sp.forEach(([a,b])=>splits.set(Number(a),Number(b)));
+  const ni=await DB.get('kv','namedIds');if(Array.isArray(ni))ni.forEach(x=>namedIds.add(Number(x)));
+  const nid=await DB.get('kv','nextClusterId');if(typeof nid==='number')nextClusterId=Math.max(nextClusterId,nid);
+  if(!opened)setSave('Memory unavailable (session only)','err');
+  else if(prevClusters.length)setSave(`Remembering ${prevClusters.length} ${prevClusters.length===1?'person':'people'}`,'save');
+  else setSave('Memory on','save');
+  return opened;
+}
+async function forgetAll(){
+  await DB.clearAll();
+  prevClusters=[];manualAdd.clear();manualRemove.clear();merges.clear();splits.clear();
+  namedIds.clear();combineSel.clear();clusters=[];nextClusterId=1;
+  for(const p of photos.values()){p.fromCache=false}
+  setSave('Memory on','save');
+  recluster();
+  toast('Saved people, names and corrections forgotten.','info');
+}
+
+/* ===================== state ===================== */
+let modelReady=false, threshold=0.45, nextId=1, working=false, nextClusterId=1;
+const photos=new Map();
+let clusters=[], prevClusters=[];
+const manualAdd=new Set(), manualRemove=new Set();   // keys are "personId|fileKey"
+const namedIds=new Set(); // people the user explicitly renamed
+let useMemory=true;       // apply saved people, or ignore them for this session
+const merges=new Map();   // personId -> personId it was merged into
+const splits=new Map();   // personId -> threshold factor (< 1 means split tighter)
+let filterSel=new Set(), filterMode='all';
+let combineSel=new Set();
+const expanded=new Set();
+function mkey(personId,fileKey){return personId+'|'+fileKey}
+
+/* =====================================================================
+   CLUSTERING
+   Canonical ordering makes the result independent of the order photos
+   were added; a centroid-linkage merge pass then repairs groups the
+   greedy first pass split apart.
+   ===================================================================== */
+function euclid(a,b){let s=0;for(let i=0;i<a.length;i++){const d=a[i]-b[i];s+=d*d}return Math.sqrt(s)}
+function canonicalSort(items){
+  return items.slice().sort((a,b)=>{
+    for(let i=0;i<a.desc.length;i++)if(a.desc[i]!==b.desc[i])return a.desc[i]-b.desc[i];
+    return 0;});
+}
+function greedyPass(items,thr){
+  const out=[];
+  for(const it of items){
+    let best=-1,bestD=Infinity;
+    for(let c=0;c<out.length;c++){const d=euclid(it.desc,out[c].centroid);if(d<bestD){bestD=d;best=c}}
+    if(best>=0&&bestD<thr){
+      const cl=out[best];cl.members.push(it.key);cl.descs.push(it.desc);
+      const n=cl.descs.length;
+      for(let i=0;i<cl.centroid.length;i++)cl.centroid[i]+=(it.desc[i]-cl.centroid[i])/n;
+    }else out.push({centroid:it.desc.slice(),members:[it.key],descs:[it.desc]});
+  }
+  return out;
+}
+function recentre(c){const m=c.descs.length,dim=c.descs[0].length;
+  c.centroid=Array.from({length:dim},(_,k)=>c.descs.reduce((s,d)=>s+d[k],0)/m);return c}
+function mergePass(cl,thr){
+  let more=true;
+  while(more){
+    more=false;let bi=-1,bj=-1,bd=Infinity;
+    for(let i=0;i<cl.length;i++)for(let j=i+1;j<cl.length;j++){
+      const d=euclid(cl[i].centroid,cl[j].centroid);if(d<bd){bd=d;bi=i;bj=j}}
+    if(bi>=0&&bd<thr){
+      cl[bi].members=cl[bi].members.concat(cl[bj].members);
+      cl[bi].descs=cl[bi].descs.concat(cl[bj].descs);
+      recentre(cl[bi]);cl.splice(bj,1);more=true;
+    }
+  }
+  return cl;
+}
+function clusterFaces(items,thr){return mergePass(greedyPass(canonicalSort(items),thr),thr*MERGE_FACTOR)}
+
+function assignIds(list,used){
+  const pool=useMemory?prevClusters:[];
+  for(const c of list){
+    if(c.id!=null)continue;
+    let best=-1,bestD=Infinity,second=Infinity;
+    pool.forEach((pc,i)=>{if(used.has(i))return;
+      const d=euclid(c.centroid,pc.centroid);
+      if(d<bestD){second=bestD;bestD=d;best=i}else if(d<second)second=d;});
+    // Reclaim a saved identity only when the match is close AND clearly better
+    // than the next candidate. An ambiguous match becomes a new person instead,
+    // because a wrong match silently replays that person's merges and edits.
+    if(best>=0&&bestD<ID_MATCH&&bestD<second*ID_MARGIN){
+      used.add(best);c.id=pool[best].id;if(!c.name)c.name=pool[best].name;
+    }else c.id=nextClusterId++;
+  }
+  return list;
+}
+function applySplits(list){
+  if(!useMemory)return list;
+  const out=[];
+  for(const c of list){
+    const f=splits.get(c.id);
+    if(!f||f>=1||c.descs.length<2){out.push(c);continue}
+    const items=c.members.map((m,i)=>({key:m,desc:c.descs[i]}));
+    const sub=clusterFaces(items,threshold*f).sort((a,b)=>b.members.length-a.members.length);
+    if(sub.length<2){out.push(c);continue}
+    sub.forEach((s,i)=>out.push({
+      id:i===0?c.id:null,
+      name:i===0?c.name:null,
+      centroid:s.centroid,members:s.members,descs:s.descs}));
+  }
+  return out;
+}
+function dedupePool(list){
+  // Two records for one person make every match look ambiguous under the margin
+  // test, which silently loses names. Keep one, preferring the anchored record.
+  const ordered=list.slice().sort((a,b)=>(isAnchored(b.id)?1:0)-(isAnchored(a.id)?1:0));
+  const out=[];
+  for(const c of ordered){
+    if(out.some(o=>euclid(o.centroid,c.centroid)<POOL_DEDUPE))continue;
+    out.push(c);
+  }
+  return out;
+}
+function isAnchored(id){
+  if(namedIds.has(id))return true;
+  if(merges.has(id))return true;
+  for(const v of merges.values())if(v===id)return true;
+  if(splits.has(id))return true;
+  const pref=id+'|';
+  for(const k of manualAdd)if(k.startsWith(pref))return true;
+  for(const k of manualRemove)if(k.startsWith(pref))return true;
+  return false;
+}
+function rootOf(id){let x=id,guard=0;while(merges.has(x)&&guard++<50)x=merges.get(x);return x}
+function applyMerges(list){
+  if(!useMemory)return list;
+  const byRoot=new Map();
+  for(const c of list){const r=rootOf(c.id);
+    if(!byRoot.has(r))byRoot.set(r,[]);byRoot.get(r).push(c)}
+  const out=[];
+  for(const [root,group] of byRoot){
+    if(group.length===1){out.push(group[0]);continue}
+    const primary=group.find(c=>c.id===root)||group[0];
+    const members=[].concat(...group.map(g=>g.members));
+    const descs=[].concat(...group.map(g=>g.descs));
+    const dim=descs[0].length;
+    out.push({id:root,name:primary.name,
+      centroid:Array.from({length:dim},(_,k)=>descs.reduce((s,d)=>s+d[k],0)/descs.length),
+      members,descs});
+  }
+  return out;
+}
+function computeMembership(){
+  for(const c of clusters){
+    const set=new Set(c.members.map(m=>m.photoId));
+    if(!useMemory){c.photoIds=set;continue}
+    for(const pid of [...set]){
+      const p=photos.get(pid);
+      if(!p||manualRemove.has(mkey(c.id,p.key)))set.delete(pid);
+    }
+    for(const p of photos.values())if(manualAdd.has(mkey(c.id,p.key)))set.add(p.id);
+    c.photoIds=set;
+  }
+}
+function recluster(){
+  const items=[];
+  for(const p of photos.values()){
+    if(!p.analysed)continue;
+    p.faces.forEach((f,idx)=>items.push({key:{photoId:p.id,faceIdx:idx},desc:f.desc}));
+  }
+  let list=clusterFaces(items,threshold).map(c=>({...c,id:null,name:null}));
+  const used=new Set();
+  list=assignIds(list,used);
+  // Identity is recorded BEFORE splitting and merging. The coarse groups are
+  // what the clusterer reproduces on every run, so those are the centroids a
+  // future session must match against; splits and merges are replayed on top.
+  const coarse=list.map(c=>({id:c.id,centroid:c.centroid.slice()}));
+  const coarseIds=new Set(coarse.map(c=>c.id));
+  list=applySplits(list);
+  list=assignIds(list,used);
+  const extra=list.filter(c=>!coarseIds.has(c.id)).map(c=>({id:c.id,centroid:c.centroid.slice()}));
+  list=applyMerges(list);
+  clusters=list;
+  computeMembership();
+  clusters=clusters.filter(c=>c.photoIds.size);
+  clusters.sort((a,b)=>b.photoIds.size-a.photoIds.size);
+  clusters.forEach((c,i)=>{if(!c.name)c.name='Person '+(i+1)});
+  if(useMemory){
+    const byId=new Map(prevClusters.map(c=>[c.id,c]));
+    for(const rec of coarse.concat(extra)){
+      const root=rootOf(rec.id);
+      const disp=clusters.find(d=>d.id===root);
+      const kept=byId.get(rec.id);
+      const name=(rec.id===root&&disp)?disp.name:(kept?kept.name:null);
+      byId.set(rec.id,{id:rec.id,name,centroid:rec.centroid});
+    }
+    // The full pool stays in memory so ids remain stable while the tab is open.
+    // Only anchored people are written to disk (see persistState).
+    prevClusters=dedupePool([...byId.values()]);
+  }
+  for(const id of [...filterSel])if(!clusters.some(c=>c.id===id))filterSel.delete(id);
+  scheduleSave();
+  renderLibrary();
+}
+function peopleOf(photoId){return clusters.filter(c=>c.photoIds.has(photoId))}
+function addPersonToPhoto(personId,photoId){
+  const p=photos.get(photoId);if(!p)return;
+  manualRemove.delete(mkey(personId,p.key));manualAdd.add(mkey(personId,p.key));
+  computeMembership();scheduleSave();renderLibrary();
+}
+function removePersonFromPhoto(personId,photoId){
+  const p=photos.get(photoId);if(!p)return;
+  manualAdd.delete(mkey(personId,p.key));manualRemove.add(mkey(personId,p.key));
+  computeMembership();scheduleSave();renderLibrary();
+}
+function mergePeople(fromId,intoId){
+  if(fromId===intoId)return;
+  if(rootOf(intoId)===fromId)merges.delete(intoId);   // avoid a cycle
+  merges.set(fromId,intoId);scheduleSave();recluster();
+}
+function isMergeRoot(id){return [...merges.keys()].some(k=>k!==id&&rootOf(k)===id)}
+function splitPerson(id){
+  // If this person exists because of a merge, splitting should undo that merge
+  // rather than sub-divide a group the user deliberately joined.
+  if(isMergeRoot(id)){
+    for(const k of [...merges.keys()])if(k!==id&&rootOf(k)===id)merges.delete(k);
+    scheduleSave();recluster();return 'unmerged';
+  }
+  const cur=splits.get(id)||1;
+  splits.set(id,cur*SPLIT_STEP);scheduleSave();recluster();return 'split';
+}
+function unsplitPerson(id){splits.delete(id);scheduleSave();recluster()}
+</script>
+<script>
+/* ===================== image pipeline ===================== */
+/* Read pixel dimensions straight from the file header. A few kilobytes are
+   enough, so this costs almost nothing and lets us ask the decoder to produce a
+   small bitmap instead of decoding tens of megapixels we immediately throw away. */
+async function readDimensions(file){
+  try{
+    const buf=new Uint8Array(await file.slice(0,Math.min(file.size||0,65536)).arrayBuffer());
+    if(buf.length<16)return null;
+    const dv=new DataView(buf.buffer,buf.byteOffset,buf.byteLength);
+    // PNG
+    if(buf[0]===0x89&&buf[1]===0x50&&buf[2]===0x4E&&buf[3]===0x47)
+      return {w:dv.getUint32(16),h:dv.getUint32(20)};
+    // GIF
+    if(buf[0]===0x47&&buf[1]===0x49&&buf[2]===0x46)
+      return {w:buf[6]|buf[7]<<8,h:buf[8]|buf[9]<<8};
+    // WebP
+    if(buf[0]===0x52&&buf[1]===0x49&&buf[2]===0x46&&buf[3]===0x46&&
+       buf[8]===0x57&&buf[9]===0x45&&buf[10]===0x42&&buf[11]===0x50){
+      const tag=String.fromCharCode(buf[12],buf[13],buf[14],buf[15]);
+      if(tag==='VP8X')return {w:1+(buf[24]|buf[25]<<8|buf[26]<<16),h:1+(buf[27]|buf[28]<<8|buf[29]<<16)};
+      if(tag==='VP8 ')return {w:(buf[26]|buf[27]<<8)&0x3fff,h:(buf[28]|buf[29]<<8)&0x3fff};
+      if(tag==='VP8L'){const b=buf[21]|buf[22]<<8|buf[23]<<16|buf[24]<<24;
+        return {w:1+(b&0x3fff),h:1+((b>>14)&0x3fff)};}
+      return null;
+    }
+    // JPEG: walk the segment markers to the frame header
+    if(buf[0]===0xFF&&buf[1]===0xD8){
+      let i=2;
+      while(i<buf.length-9){
+        if(buf[i]!==0xFF){i++;continue}
+        const m=buf[i+1];
+        if(m===0xD8||m===0x01||(m>=0xD0&&m<=0xD7)){i+=2;continue}
+        const len=dv.getUint16(i+2);
+        const isSOF=(m>=0xC0&&m<=0xCF)&&m!==0xC4&&m!==0xC8&&m!==0xCC;
+        if(isSOF)return {h:dv.getUint16(i+5),w:dv.getUint16(i+7)};
+        i+=2+len;
+      }
+    }
+  }catch(e){}
+  return null;
+}
+async function decodeFull(file,maxDim){
+  if(typeof createImageBitmap==='function'){
+    const dims=await readDimensions(file);
+    let opts;
+    if(dims&&dims.w>0&&dims.h>0){
+      const scale=Math.min(1,maxDim/Math.max(dims.w,dims.h));
+      if(scale<1)opts={resizeWidth:Math.max(1,Math.round(dims.w*scale)),
+                       resizeHeight:Math.max(1,Math.round(dims.h*scale)),
+                       resizeQuality:'medium'};
+    }
+    // imageOrientation also fixes sideways phone photos
+    for(const o of [Object.assign({imageOrientation:'from-image'},opts||{}),opts,undefined]){
+      try{
+        const bmp=await withTimeout(o?createImageBitmap(file,o):createImageBitmap(file),DECODE_TIMEOUT,'decode');
+        return {src:bmp,w:bmp.width,h:bmp.height,release(){try{bmp.close&&bmp.close()}catch(e){}}};
+      }catch(e){}
+    }
+  }
+  const url=URL.createObjectURL(file);
+  try{
+    const img=await withTimeout(new Promise((res,rej)=>{const i=new Image();
+      i.onload=()=>res(i);i.onerror=()=>rej(new Error('decode failed'));i.src=url}),DECODE_TIMEOUT,'decode');
+    return {src:img,w:img.naturalWidth,h:img.naturalHeight,release(){URL.revokeObjectURL(url)}};
+  }catch(e){URL.revokeObjectURL(url);throw e}
+}
+function scaledCanvas(src,w,h,max){
+  const s=Math.min(1,max/Math.max(w,h));
+  const c=document.createElement('canvas');
+  c.width=Math.max(1,Math.round(w*s));c.height=Math.max(1,Math.round(h*s));
+  c.getContext('2d',{alpha:false}).drawImage(src,0,0,c.width,c.height);
+  return c;
+}
+function canvasToBlob(canvas,type,q){return new Promise(res=>{
+  if(canvas.toBlob)canvas.toBlob(b=>res(b),type,q);else res(null)})}
+function cropFaceThumb(canvas,box){
+  const pad=0.25;
+  let x=Math.max(0,box.x-box.width*pad), y=Math.max(0,box.y-box.height*pad);
+  const w=box.width*(1+2*pad), h=box.height*(1+2*pad);
+  const s=Math.min(Math.max(w,h),Math.min(canvas.width-x,canvas.height-y));
+  const c=document.createElement('canvas');c.width=FACE_THUMB;c.height=FACE_THUMB;
+  c.getContext('2d',{alpha:false}).drawImage(canvas,x,y,s,s,0,0,FACE_THUMB,FACE_THUMB);
+  try{return c.toDataURL('image/jpeg',0.8)}catch(e){return null}
+}
+async function processPhoto(p,doFaces){
+  const need=doFaces?QUALITY.analyse:THUMB_MAX;
+  const d=await decodeFull(p.file,need);
+  try{
+    let thumbBlob=null,wc=null;
+    if(doFaces&&!p.analysed){
+      wc=scaledCanvas(d.src,d.w,d.h,QUALITY.analyse);
+      const dets=await faceapi.detectAllFaces(wc,
+          new faceapi.TinyFaceDetectorOptions({inputSize:QUALITY.input,scoreThreshold:0.5}))
+        .withFaceLandmarks().withFaceDescriptors();
+      p.faces=dets.map(det=>{const b=det.detection.box;
+        return {box:{x:b.x/wc.width,y:b.y/wc.height,w:b.width/wc.width,h:b.height/wc.height},
+          desc:Array.from(det.descriptor),thumb:cropFaceThumb(wc,b)}});
+      p.analysed=true;
+    }
+    if(!p.thumbUrl){
+      // reuse the analysis canvas where we have one: it is already small, so this
+      // avoids a second draw from the decoded source
+      const src=wc||d.src, sw=wc?wc.width:d.w, sh=wc?wc.height:d.h;
+      const tc=scaledCanvas(src,sw,sh,THUMB_MAX);
+      thumbBlob=await canvasToBlob(tc,'image/jpeg',0.82);
+      if(thumbBlob)p.thumbUrl=URL.createObjectURL(thumbBlob);
+      tc.width=tc.height=1;p.thumbed=true;
+    }
+    if(wc)wc.width=wc.height=1;
+    p.failed=false;
+    if(p.analysed)queueCacheWrite(p.key,{faces:p.faces,thumb:thumbBlob||null,at:Date.now()});
+  }finally{d.release()}
+}
+const cacheQueue=new Map();let cacheTimer=null;
+function queueCacheWrite(key,val){
+  cacheQueue.set(key,val);
+  if(cacheQueue.size>=12)flushCache();
+  else if(!cacheTimer)cacheTimer=setTimeout(flushCache,800);
+}
+async function flushCache(){
+  if(cacheTimer){clearTimeout(cacheTimer);cacheTimer=null}
+  if(!cacheQueue.size)return;
+  const items=[...cacheQueue.entries()];cacheQueue.clear();
+  for(const [k,v] of items)await DB.set('faces',k,v);
+}
+async function hydrateFromCache(p){
+  const rec=await DB.get('faces',p.key);
+  if(!rec||!Array.isArray(rec.faces))return false;
+  p.faces=rec.faces;p.analysed=true;p.thumbed=true;p.fromCache=true;
+  if(rec.thumb){try{p.thumbUrl=URL.createObjectURL(rec.thumb)}catch(e){}}
+  return true;
+}
+async function runQueue(){
+  if(working)return;
+  let cached=0;
+  for(const p of photos.values()){
+    if(p.analysed||p.failed)continue;
+    try{if(await hydrateFromCache(p))cached++}catch(e){}
+  }
+  if(cached){toast(`${cached} photo${cached>1?'s':''} restored from memory, no re-analysis needed.`,'ok');renderLibrary()}
+  const pending=[...photos.values()].filter(p=>!p.failed&&(!p.thumbUrl||(modelReady&&!p.analysed)));
+  if(!pending.length){await flushCache();recluster();updateControls();return}
+  working=true;updateControls();
+  const total=pending.length;
+  let done=0,failed=0,next=0;
+  const t0=Date.now();
+  const lane=async()=>{
+    while(true){
+      const i=next++;
+      if(i>=total)break;
+      const p=pending[i];
+      try{await withTimeout(processPhoto(p,modelReady),PROCESS_TIMEOUT,'processing '+p.name)}
+      catch(e){console.error('failed on',p.name,e);p.failed=true;p.analysed=false;failed++}
+      done++;setProgress(done,total);refreshCard(p);
+      const secs=(Date.now()-t0)/1000;
+      const rate=secs>0.5?done/secs:0;
+      setStatus(`Processing ${done} / ${total}${rate?' · '+Math.round(rate*60)+'/min':''}…`,'busy');
+      if(done%4===0)await nextFrame();
+    }
+  };
+  await Promise.all(Array.from({length:Math.min(CONCURRENCY,total)},lane));
+  await flushCache();
+  working=false;setProgress(1,1);
+  const secs=(Date.now()-t0)/1000;
+  lastRate=secs>0?total/secs:0;
+  setStatus(modelReady
+    ?`Face engine ready${lastRate?' · '+Math.round(lastRate*60)+'/min':''}`
+    :'Manual mode — face engine unavailable',modelReady?'ok':'err');
+  if(failed)toast(`${failed} photo${failed>1?'s':''} could not be read. See "Could not process" to retry.`,'err');
+  recluster();updateControls();
+}
+
+/* ===================== face engine ===================== */
+const WEIGHT_BASES=['https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js/weights',
+  'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights'];
+async function bootEngine(){
+  setStatus('Loading face engine…','busy');
+  try{
+    await loadScript(['https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js',
+      'https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js']);
+    try{if(faceapi.tf&&faceapi.tf.setBackend){await faceapi.tf.setBackend('webgl');if(faceapi.tf.ready)await faceapi.tf.ready()}}catch(e){}
+    let loaded=false,lastErr=null;
+    for(const base of WEIGHT_BASES){
+      try{
+        await faceapi.nets.tinyFaceDetector.loadFromUri(base);
+        await faceapi.nets.faceLandmark68Net.loadFromUri(base);
+        await faceapi.nets.faceRecognitionNet.loadFromUri(base);
+        loaded=true;break;
+      }catch(e){lastErr=e}
+    }
+    if(!loaded)throw lastErr||new Error('weights failed');
+    modelReady=true;
+    let be='';
+    try{
+      const tf=faceapi.tf;
+      if(tf&&tf.setBackend&&tf.getBackend&&tf.getBackend()!=='webgl'){
+        try{await tf.setBackend('webgl');if(tf.ready)await tf.ready()}catch(e){}
+      }
+      be=(tf&&tf.getBackend&&tf.getBackend())||'';
+    }catch(e){}
+    setStatus('Face engine ready'+(be?' ('+be+')':''),'ok');
+    if(be==='cpu')toast('Running on the CPU because WebGL is unavailable, which is many times slower. Enabling hardware acceleration in your browser settings will speed this up a lot.','err');
+  }catch(e){
+    console.error(e);modelReady=false;
+    setStatus('Manual mode — face engine unavailable','err');
+    toast('The face engine could not load. Thumbnails still work; use Re-analyse to retry.','err');
+  }
+  if(photos.size)runQueue();
+  updateControls();
+}
+
+/* ===================== buckets & filter ===================== */
+function inAnyCluster(id){return clusters.some(c=>c.photoIds.has(id))}
+function bucketFailed(){return [...photos.values()].filter(p=>p.failed)}
+function bucketNoPeople(){return [...photos.values()].filter(p=>!p.failed&&p.analysed&&p.faces.length===0&&!inAnyCluster(p.id))}
+function bucketUnassigned(){return [...photos.values()].filter(p=>!p.failed&&p.analysed&&p.faces.length>0&&!inAnyCluster(p.id))}
+function bucketUnsorted(){return [...photos.values()].filter(p=>!p.failed&&!p.analysed)}
+function filteredPhotos(){
+  const ids=[...filterSel];if(!ids.length)return [];
+  const sel=clusters.filter(c=>ids.includes(c.id));const out=[];
+  for(const p of photos.values()){
+    const hits=sel.filter(c=>c.photoIds.has(p.id)).length;
+    if(filterMode==='all'?hits===sel.length:hits>0)out.push(p);
+  }
+  return out;
+}
+function avatarFor(c){
+  const ref=c.members.find(m=>photos.has(m.photoId)&&c.photoIds.has(m.photoId));
+  if(!ref)return null;
+  const p=photos.get(ref.photoId);
+  return p&&p.faces[ref.faceIdx]?p.faces[ref.faceIdx].thumb:null;
+}
+const BLANK_FACE='<span class="face blank"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.8 3.1-7 7-7s7 3.2 7 7"/></svg></span>';
+function makeChip(c,selected,onToggle){
+  const b=document.createElement('button');
+  b.className='chip';b.type='button';
+  b.setAttribute('aria-pressed',selected?'true':'false');
+  const src=avatarFor(c);
+  b.innerHTML=(src?`<img class="face" src="${src}" alt="">`:BLANK_FACE)+
+    `<span>${escapeHtml(c.name)}</span><span class="n">${c.photoIds.size}</span>`;
+  b.title=`${c.name} — ${c.photoIds.size} photo${c.photoIds.size===1?'':'s'}`;
+  b.addEventListener('click',()=>onToggle(c));
+  return b;
+}
+function renderChips(){
+  const bar=$('filterbar'),chips=$('chips');
+  bar.hidden=clusters.length===0;chips.innerHTML='';
+  for(const c of clusters)chips.appendChild(makeChip(c,filterSel.has(c.id),
+    cc=>{filterSel.has(cc.id)?filterSel.delete(cc.id):filterSel.add(cc.id);renderLibrary()}));
+  $('clearFilter').hidden=filterSel.size===0;
+}
+
+/* ===================== rendering ===================== */
+function refreshCard(p){
+  document.querySelectorAll('.card[data-photo="'+p.id+'"]').forEach(card=>{
+    const img=card.querySelector('img');
+    if(p.thumbUrl&&img&&img.getAttribute('src')!==p.thumbUrl){img.src=p.thumbUrl;card.classList.remove('pending')}
+    const badge=card.querySelector('.badge');
+    if(badge){
+      if(p.failed){badge.textContent='!';badge.className='badge bad';badge.title='Could not read this photo'}
+      else if(p.analysed){badge.textContent=String(p.faces.length);badge.className='badge'}
+    }
+  });
+}
+function makeCard(p,personId){
+  const card=document.createElement('div');
+  card.className='card'+(p.thumbUrl?'':' pending');card.draggable=true;card.dataset.photo=p.id;
+  const names=peopleOf(p.id).map(c=>c.name);
+  const badgeTxt=p.failed?'!':(p.analysed?p.faces.length:'…');
+  card.innerHTML=`<span class="badge${p.failed?' bad':''}">${badgeTxt}</span>
+    ${p.fromDrive?'<span class="src-tag" title="from Google Drive"></span>':''}
+    ${p.fromCache?'<span class="cached" title="restored from memory">·</span>':''}
+    <img alt="${escapeHtml(p.name)}" loading="lazy" decoding="async"${p.thumbUrl?` src="${p.thumbUrl}"`:''}>
+    ${(p.faces||[]).map(f=>`<div class="facebox" style="left:${f.box.x*100}%;top:${f.box.y*100}%;width:${f.box.w*100}%;height:${f.box.h*100}%"></div>`).join('')}
+    ${names.length>1?`<span class="pcount" title="${escapeHtml(names.join(', '))}">${names.length} people</span>`:''}`;
+  if(personId!=null){
+    const bar=document.createElement('div');bar.className='card-actions';
+    const rm=document.createElement('button');rm.textContent='remove';
+    rm.title='Remove this photo from this person only';
+    rm.addEventListener('click',e=>{e.stopPropagation();
+      const cl=clusters.find(c=>c.id===personId);
+      removePersonFromPhoto(personId,p.id);
+      toast(`Removed from ${cl?cl.name:'person'}.`,'info')});
+    bar.appendChild(rm);card.appendChild(bar);
+  }
+  card.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',JSON.stringify({photoId:p.id}));card.classList.add('dragging')});
+  card.addEventListener('dragend',()=>card.classList.remove('dragging'));
+  return card;
+}
+function personSection(o){
+  const sec=document.createElement('section');
+  sec.className='person'+(o.failedBucket?' failed':'');
+  if(o.personId!=null)sec.dataset.person=o.personId;
+  const head=document.createElement('div');head.className='person-head';
+  const av=document.createElement('div');av.className='avatar';
+  if(o.avatarSrc){const i=document.createElement('img');i.src=o.avatarSrc;i.alt='';av.appendChild(i)}
+  else av.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.8 3.1-7 7-7s7 3.2 7 7"/></svg>';
+  head.appendChild(av);
+  if(o.renamable){
+    const inp=document.createElement('input');inp.className='person-name';inp.value=o.title;inp.spellcheck=false;
+    inp.addEventListener('change',()=>{const cl=clusters.find(c=>c.id===o.personId);
+      if(cl&&inp.value.trim()){cl.name=inp.value.trim();namedIds.add(o.personId);
+        const pv=prevClusters.find(c=>c.id===o.personId);
+        if(pv)pv.name=cl.name;else prevClusters.push({id:cl.id,name:cl.name,centroid:cl.centroid});
+        scheduleSave();renderChips();renderCombineBar();toast(`Renamed to ${cl.name}.`,'ok')}});
+    head.appendChild(inp);
+  }else{
+    const h=document.createElement('div');h.className='person-name';h.textContent=o.title;
+    h.style.pointerEvents='none';head.appendChild(h);
+  }
+  const m=document.createElement('div');m.className='person-meta';m.textContent=o.meta;head.appendChild(m);
+  const acts=document.createElement('div');acts.className='person-actions';
+  if(o.failedBucket){
+    const rt=document.createElement('button');rt.className='btn ghost small';rt.textContent='Retry these';
+    rt.addEventListener('click',()=>{o.photoList.forEach(p=>{p.failed=false});runQueue()});
+    acts.appendChild(rt);
+  }else{
+    if(o.personId!=null){
+      const sp=document.createElement('button');sp.className='btn ghost small';
+      const isSplit=splits.has(o.personId);
+      const isMerged=isMergeRoot(o.personId);
+      sp.textContent=isMerged?'Unmerge':(isSplit?'Split more':'Split');
+      sp.title=isMerged?'Undo the merge that created this person'
+        :'Separate this group if it actually contains more than one person';
+      sp.addEventListener('click',()=>{
+        const what=splitPerson(o.personId);
+        toast(what==='unmerged'?'Merge undone.':'Split applied. Press again to go finer.','info')});
+      acts.appendChild(sp);
+      if(isSplit){
+        const un=document.createElement('button');un.className='btn ghost small';un.textContent='Undo split';
+        un.addEventListener('click',()=>{unsplitPerson(o.personId);toast('Split undone.','info')});
+        acts.appendChild(un);
+      }
+      const others=clusters.filter(c=>c.id!==o.personId);
+      if(others.length){
+        const sel=document.createElement('select');sel.className='small';
+        sel.innerHTML='<option value="">Merge into…</option>'+
+          others.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+        sel.addEventListener('change',()=>{
+          const target=Number(sel.value);if(!target)return;
+          const tName=(clusters.find(c=>c.id===target)||{}).name;
+          const snap=snapshotMerges();
+          mergePeople(o.personId,target);
+          toastAction(`Merged into ${tName}.`,'Undo',()=>restoreMerges(snap),'ok');
+        });
+        acts.appendChild(sel);
+      }
+    }
+    const dl=document.createElement('button');dl.className='btn ghost small';dl.textContent='Download .zip';
+    dl.addEventListener('click',()=>downloadZip(o.title,o.photoList));
+    acts.appendChild(dl);
+  }
+  head.appendChild(acts);sec.appendChild(head);
+  const body=document.createElement('div');body.className='person-body';
+  const showAll=expanded.has(o.key)||o.photoList.length<=RENDER_CAP;
+  (showAll?o.photoList:o.photoList.slice(0,RENDER_CAP)).forEach(p=>body.appendChild(makeCard(p,o.personId)));
+  sec.appendChild(body);
+  if(!showAll){
+    const row=document.createElement('div');row.className='more-row';
+    const b=document.createElement('button');b.className='btn ghost small';
+    b.textContent=`Show all ${o.photoList.length} photos`;
+    b.addEventListener('click',()=>{expanded.add(o.key);renderLibrary()});
+    row.appendChild(b);sec.appendChild(row);
+  }
+  if(o.personId!=null){
+    sec.addEventListener('dragover',e=>{e.preventDefault();sec.classList.add('drag-over')});
+    sec.addEventListener('dragleave',()=>sec.classList.remove('drag-over'));
+    sec.addEventListener('drop',e=>{e.preventDefault();sec.classList.remove('drag-over');
+      try{const d=JSON.parse(e.dataTransfer.getData('text/plain'));
+        const cl=clusters.find(c=>c.id===o.personId);
+        if(d.photoId&&cl&&!cl.photoIds.has(d.photoId)){
+          addPersonToPhoto(o.personId,d.photoId);toast(`Added to ${cl.name}.`,'ok')}
+      }catch(err){}});
+  }
+  return sec;
+}
+function renderCombineBar(){
+  const bar=$('combinebar'),chips=$('combineChips');
+  bar.hidden=clusters.length<2;
+  chips.innerHTML='';
+  for(const id of [...combineSel])if(!clusters.some(c=>c.id===id))combineSel.delete(id);
+  for(const c of clusters)chips.appendChild(makeChip(c,combineSel.has(c.id),
+    cc=>{combineSel.has(cc.id)?combineSel.delete(cc.id):combineSel.add(cc.id);renderCombineBar()}));
+  const n=combineSel.size, ready=n>=2;
+  const keep=$('combineKeep'),btn=$('combineBtn'),clr=$('combineClear'),lab=$('keepLabel'),all=$('combineAll');
+  keep.hidden=!ready;lab.hidden=!ready;btn.hidden=!ready;clr.hidden=n===0;
+  all.hidden=clusters.length<3;all.textContent=(n===clusters.length)?'Select none':'Select all';
+  if(ready){
+    const chosen=clusters.filter(c=>combineSel.has(c.id))
+      .sort((a,b)=>b.photoIds.size-a.photoIds.size);
+    const prev=Number(keep.value);
+    keep.innerHTML=chosen.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+    if(chosen.some(c=>c.id===prev))keep.value=String(prev);
+    btn.textContent=`Combine ${n} into one`;
+  }
+}
+function snapshotMerges(){return [...merges.entries()]}
+function restoreMerges(snap){
+  merges.clear();snap.forEach(([k,v])=>merges.set(k,v));
+  scheduleSave();recluster();toast('Undone.','info');
+}
+function combineSelected(){
+  const ids=[...combineSel];
+  if(ids.length<2)return;
+  const keep=Number($('combineKeep').value)||ids[0];
+  const keepName=(clusters.find(c=>c.id===keep)||{}).name;
+  const snap=snapshotMerges();
+  let n=0;
+  for(const id of ids)if(id!==keep){merges.set(id,keep);n++}
+  namedIds.add(keep);
+  combineSel.clear();scheduleSave();recluster();
+  toastAction(`Combined ${n+1} groups into ${keepName}.`,'Undo',()=>restoreMerges(snap),'ok');
+}
+function updateTally(){
+  const n=clusters.length;
+  if(!n){$('tally').textContent='';return}
+  const biggest=Math.max(...clusters.map(c=>c.photoIds.size));
+  $('tally').textContent=`${n} ${n===1?'person':'people'}, largest ${biggest}`;
+}
+function renderLibrary(){
+  const lib=$('library');lib.innerHTML='';renderChips();renderCombineBar();updateTally();
+  if(photos.size===0){
+    const e=document.createElement('div');e.className='empty-state';
+    e.innerHTML='<b>No photos yet</b>Add some above, or open them from Drive.<br>'+
+      'Faces are read on your machine and never uploaded.';
+    lib.appendChild(e);updateControls();return;
+  }
+  if(filterSel.size){
+    const list=filteredPhotos();
+    const names=clusters.filter(c=>filterSel.has(c.id)).map(c=>c.name);
+    lib.appendChild(personSection({key:'filter',title:names.join(filterMode==='all'?' + ':' or '),
+      meta:`${list.length} photo${list.length===1?'':'s'}`,photoList:list,personId:null,renamable:false}));
+    updateControls();return;
+  }
+  for(const c of clusters){
+    const list=[...c.photoIds].map(id=>photos.get(id)).filter(Boolean);
+    const ref=c.members.find(m=>photos.has(m.photoId)&&c.photoIds.has(m.photoId));
+    const ap=ref?photos.get(ref.photoId):null;
+    const avatarSrc=ap&&ap.faces[ref.faceIdx]?ap.faces[ref.faceIdx].thumb:null;
+    lib.appendChild(personSection({key:'c'+c.id,title:c.name,
+      meta:`${list.length} photo${list.length===1?'':'s'}`,photoList:list,
+      personId:c.id,avatarSrc,renamable:true}));
+  }
+  const add=(key,title,meta,list,failedBucket)=>{
+    if(list.length)lib.appendChild(personSection({key,title,meta,photoList:list,personId:null,renamable:false,failedBucket}))};
+  const fl=bucketFailed();add('failed','Could not process',`${fl.length} photo${fl.length===1?'':'s'}`,fl,true);
+  const un=bucketUnassigned();add('unassigned','Not assigned',`${un.length} with faces but no person`,un);
+  const np=bucketNoPeople();add('nopeople','No people',`${np.length} photo${np.length===1?'':'s'}`,np);
+  const us=bucketUnsorted();add('unsorted','Unsorted',`${us.length} awaiting analysis`,us);
+  updateControls();
+}
+
+/* ===================== manifest ===================== */
+function csvEscape(v){v=String(v==null?'':v);return /[",\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
+function buildManifestCsv(){
+  const rows=[['filename','people','faces_detected','source','status']];
+  for(const p of photos.values())rows.push([p.name,peopleOf(p.id).map(c=>c.name).join('; '),
+    p.analysed?String(p.faces.length):'',p.fromDrive?'drive':'local',
+    p.failed?'failed':(p.analysed?'ok':'pending')]);
+  return rows.map(r=>r.map(csvEscape).join(',')).join('\r\n');
+}
+function downloadManifest(){
+  const blob=new Blob([buildManifestCsv()],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='people.csv';a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);toast('Downloaded people.csv','ok');
+}
+</script>
+<script>
+/* ===================== ingestion ===================== */
+function isHeic(f){return /\.hei[cf]$/i.test(f.name||'')||/hei[cf]/.test(f.type||'')}
+let heicLib=null;
+async function convertHeic(file){
+  if(heicLib===null){
+    try{await loadScript(['https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js',
+      'https://unpkg.com/heic2any@0.0.4/dist/heic2any.min.js']);heicLib=window.heic2any||false}
+    catch(e){heicLib=false}
+  }
+  if(!heicLib)throw new Error('heic converter unavailable');
+  const blob=await heicLib({blob:file,toType:'image/jpeg',quality:0.92});
+  const out=Array.isArray(blob)?blob[0]:blob;
+  return new File([out],(file.name||'photo').replace(/\.hei[cf]$/i,'.jpg'),{type:'image/jpeg'});
+}
+async function ingestFiles(arr,fromDrive,driveIds){
+  const added=[];let skippedHeic=0,skippedOther=0,bytes=0,i=0;
+  for(let file of arr){
+    const driveId=driveIds?driveIds[i]:null;i++;
+    if(!file)continue;
+    if(isHeic(file)){
+      try{setStatus('Converting HEIC…','busy');file=await convertHeic(file)}
+      catch(e){skippedHeic++;continue}
+    }
+    if(!(typeof file.type==='string'&&file.type.startsWith('image/'))){skippedOther++;continue}
+    bytes+=file.size||0;
+    const id=nextId++;
+    photos.set(id,{id,name:file.name,file,
+      key:fileKeyOf(file.name,file.size,file.lastModified,driveId),
+      thumbUrl:null,driveId:driveId||null,fromDrive:!!fromDrive,fromCache:false,
+      thumbed:false,analysed:false,failed:false,faces:[]});
+    added.push(photos.get(id));
+  }
+  if(skippedHeic)toast(`${skippedHeic} HEIC file${skippedHeic>1?'s':''} could not be converted and were skipped.`,'err');
+  if(skippedOther)toast(`${skippedOther} non-image file${skippedOther>1?'s':''} skipped.`,'info');
+  if(added.length>=BIG_BATCH||bytes>500*1048576)
+    toast(`${added.length} photos (${fmtBytes(bytes)}). They are processed one at a time to stay within memory, so this will take a while.`,'info');
+  if(added.length){renderLibrary();updateControls()}
+  return added;
+}
+async function addLocal(fileList){
+  const added=await ingestFiles([...fileList],false);
+  if(added.length&&added.length<BIG_BATCH)toast(`Added ${added.length} photo${added.length>1?'s':''}.`,'ok');
+  await runQueue();
+}
+async function downloadZip(label,items){
+  if(!items.length)return;
+  const zip=new JSZip(),used={};
+  for(const p of items){let name=p.name||('photo-'+p.id);
+    if(used[name]){const d=name.lastIndexOf('.');name=d>0?name.slice(0,d)+'-'+p.id+name.slice(d):name+'-'+p.id}
+    used[name]=true;zip.file(name,p.file)}
+  const blob=await zip.generateAsync({type:'blob'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=(label.replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'-').toLowerCase()||'photos')+'.zip';a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  toast(`Downloaded ${items.length} photo${items.length>1?'s':''} for ${label}.`,'ok');
+}
+function updateControls(){
+  const has=photos.size>0;
+  $('clearBtn').disabled=!has||working;
+  $('reBtn').disabled=!has||working;
+  $('manifestBtn').disabled=!has;
+  $('pickBtn').disabled=working;
+  $('driveOpenBtn').disabled=!driveReady()||working;
+  $('driveSaveBtn').disabled=!(has&&driveReady())||working;
+}
+
+/* ===================== Google Drive ===================== */
+let driveCfg={clientId:'',apiKey:'',appId:''};
+let gapiReady=false,gisReady=false,tokenClient=null,accessToken=null,googleLoading=null;
+function driveReady(){return !!(driveCfg.clientId&&driveCfg.apiKey&&driveCfg.appId)}
+const SCOPE='https://www.googleapis.com/auth/drive.file';
+function loadCfg(){const raw=store.get('driveCfg');if(raw){try{driveCfg=JSON.parse(raw)}catch(e){}}
+  $('cfgClient').value=driveCfg.clientId||'';$('cfgKey').value=driveCfg.apiKey||'';$('cfgApp').value=driveCfg.appId||'';
+  $('driveStatus').textContent=driveReady()?'Credentials saved — ready to connect':'Not connected'}
+function saveCfg(){driveCfg={clientId:$('cfgClient').value.trim(),apiKey:$('cfgKey').value.trim(),appId:$('cfgApp').value.trim()};
+  store.set('driveCfg',JSON.stringify(driveCfg));
+  gapiReady=gisReady=false;tokenClient=null;accessToken=null;googleLoading=null;
+  const ok=driveReady();
+  $('driveStatus').textContent=ok?'Credentials saved — ready to connect':'Fill in all three fields';
+  toast(ok?'Drive credentials saved.':'Fill in all three fields.',ok?'ok':'err');updateControls()}
+function clearCfg(){driveCfg={clientId:'',apiKey:'',appId:''};store.del('driveCfg');
+  $('cfgClient').value=$('cfgKey').value=$('cfgApp').value='';accessToken=null;
+  $('driveStatus').textContent='Not connected';updateControls();toast('Drive credentials forgotten.','info')}
+async function ensureGoogle(){
+  if(!driveReady())throw new Error('missing credentials');
+  if(gapiReady&&gisReady)return;
+  if(!googleLoading){googleLoading=(async()=>{
+    await loadScriptCb('https://apis.google.com/js/api.js');
+    await new Promise(res=>gapi.load('picker',res));gapiReady=true;
+    await loadScriptCb('https://accounts.google.com/gsi/client');
+    tokenClient=google.accounts.oauth2.initTokenClient({client_id:driveCfg.clientId,scope:SCOPE,callback:()=>{}});
+    gisReady=true})()}
+  await googleLoading;
+}
+function getToken(){return new Promise((resolve,reject)=>{
+  if(!tokenClient)return reject(new Error('not initialised'));
+  tokenClient.callback=(resp)=>{if(resp&&resp.error)return reject(resp);accessToken=resp.access_token;resolve(accessToken)};
+  tokenClient.requestAccessToken({prompt:accessToken?'':'consent'})})}
+async function openPicker(){
+  try{
+    $('driveStatus').textContent='Connecting…';
+    await ensureGoogle();await getToken();
+    $('driveStatus').textContent='Choose photos in the picker window';
+    const view=new google.picker.DocsView(google.picker.ViewId.DOCS_IMAGES)
+      .setIncludeFolders(true).setSelectFolderEnabled(false).setMode(google.picker.DocsViewMode.GRID);
+    const picker=new google.picker.PickerBuilder()
+      .setOAuthToken(accessToken).setDeveloperKey(driveCfg.apiKey).setAppId(driveCfg.appId)
+      .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
+      .addView(view).setCallback(onPicked).build();
+    picker.setVisible(true);
+  }catch(err){console.error(err);$('driveStatus').textContent='Connection failed';
+    toast('Drive connection failed. Check the credentials and that this origin is authorised.','err')}
+}
+async function onPicked(data){
+  if(data.action!==google.picker.Action.PICKED){
+    if(data.action===google.picker.Action.CANCEL)$('driveStatus').textContent='Connected';return}
+  const docs=data.docs||[];const files=[],ids=[];let got=0;
+  for(const d of docs){
+    $('driveStatus').textContent=`Downloading ${got+1} / ${docs.length}…`;setProgress(got,docs.length);
+    try{
+      const res=await fetch(`https://www.googleapis.com/drive/v3/files/${d.id}?alt=media`,
+        {headers:{Authorization:'Bearer '+accessToken}});
+      if(!res.ok)throw new Error('http '+res.status);
+      const blob=await res.blob();
+      files.push(new File([blob],d.name||('drive-'+d.id),{type:blob.type||d.mimeType||'image/jpeg'}));
+      ids.push(d.id);
+    }catch(e){console.error('download failed',d.id,e)}
+    got++;setProgress(got,docs.length);
+  }
+  setProgress(1,1);
+  $('driveStatus').textContent=`Imported ${files.length} from Drive`;
+  const added=await ingestFiles(files,true,ids);
+  toast(`Imported ${added.length} photo${added.length===1?'':'s'} from Drive.`,'ok');
+  await runQueue();
+}
+async function driveCreateFolder(name,parentId){
+  const meta={name,mimeType:'application/vnd.google-apps.folder'};if(parentId)meta.parents=[parentId];
+  const res=await fetch('https://www.googleapis.com/drive/v3/files?fields=id',
+    {method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify(meta)});
+  if(!res.ok)throw new Error('folder create failed');return (await res.json()).id;
+}
+async function driveUpload(file,parentId){
+  const meta={name:file.name,parents:[parentId]};
+  const form=new FormData();
+  form.append('metadata',new Blob([JSON.stringify(meta)],{type:'application/json'}));
+  form.append('file',file);
+  const res=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
+    {method:'POST',headers:{Authorization:'Bearer '+accessToken},body:form});
+  if(!res.ok)return null;return (await res.json()).id;
+}
+async function driveCreateShortcut(name,targetId,parentId){
+  const meta={name,mimeType:'application/vnd.google-apps.shortcut',parents:[parentId],shortcutDetails:{targetId}};
+  const res=await fetch('https://www.googleapis.com/drive/v3/files?fields=id',
+    {method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify(meta)});
+  return res.ok;
+}
+async function driveUploadText(name,text,parentId){
+  return await driveUpload(new File([text],name,{type:'text/csv'}),parentId)}
+function exportJobs(){
+  const jobs=[];
+  for(const c of clusters){
+    const items=[...c.photoIds].map(id=>photos.get(id)).filter(Boolean);
+    if(items.length)jobs.push({label:c.name,items});
+  }
+  const un=bucketUnassigned();if(un.length)jobs.push({label:'Not assigned',items:un});
+  const np=bucketNoPeople();if(np.length)jobs.push({label:'No people',items:np});
+  return jobs;
+}
+async function saveToDrive(){
+  if(!photos.size)return;
+  const btn=$('driveSaveBtn');btn.disabled=true;
+  const mode=$('exportMode').value;
+  try{
+    await ensureGoogle();await getToken();
+    $('saveStatus').textContent='Creating folders…';
+    const stamp=new Date().toISOString().slice(0,16).replace('T',' ');
+    const root=await driveCreateFolder('Photo library '+stamp,null);
+    const jobs=exportJobs();
+    const total=jobs.reduce((s,j)=>s+j.items.length,0);
+    let done=0,failed=0,uploaded=0,linked=0,originalsFolder=null;
+    for(const job of jobs){
+      const fid=await driveCreateFolder(job.label,root);
+      for(const p of job.items){
+        $('saveStatus').textContent=`Writing ${done+1} / ${total}…`;setProgress(done,total);
+        try{
+          if(mode==='copies'){const id=await driveUpload(p.file,fid);id?uploaded++:failed++}
+          else{
+            if(!p.driveId){
+              if(!originalsFolder)originalsFolder=await driveCreateFolder('_originals',root);
+              const id=await driveUpload(p.file,originalsFolder);
+              if(id){p.driveId=id;uploaded++}else{failed++;done++;continue}
+            }
+            const ok=await driveCreateShortcut(p.name,p.driveId,fid);ok?linked++:failed++;
+          }
+        }catch(e){console.error(e);failed++}
+        done++;setProgress(done,total);
+      }
+    }
+    $('saveStatus').textContent='Writing people.csv…';
+    await driveUploadText('people.csv',buildManifestCsv(),root);
+    setProgress(1,1);
+    const label=`"Photo library ${stamp}"`;const parts=[];
+    if(linked)parts.push(`${linked} link${linked===1?'':'s'}`);
+    if(uploaded)parts.push(`${uploaded} upload${uploaded===1?'':'s'}`);
+    if(failed)parts.push(`${failed} failed`);
+    $('saveStatus').textContent=`Saved to ${label} (${parts.join(', ')})`;
+    if(failed&&mode==='shortcuts'&&!linked)toast('Shortcuts were rejected. Switch the dropdown to "Full copies" and try again.','err');
+    else toast(failed?`Saved with ${failed} failure${failed===1?'':'s'}.`:`Saved to Drive → ${label}.`,failed?'info':'ok');
+  }catch(err){console.error(err);$('saveStatus').textContent='Save failed';
+    toast('Save failed. Check that the Drive API is enabled and you granted access.','err')}
+  finally{btn.disabled=false;updateControls()}
+}
+
+/* ===================== wiring ===================== */
+$('pickBtn').addEventListener('click',()=>$('fileInput').click());
+$('dropzone').addEventListener('click',()=>$('fileInput').click());
+$('fileInput').addEventListener('change',e=>{addLocal(e.target.files);e.target.value=''});
+$('clearBtn').addEventListener('click',()=>{
+  for(const p of photos.values())if(p.thumbUrl)URL.revokeObjectURL(p.thumbUrl);
+  photos.clear();clusters=[];filterSel.clear();expanded.clear();
+  $('library').innerHTML='';renderChips();updateControls();$('saveStatus').textContent='';
+  toast('Photos cleared. Saved people and names are kept.','info')});
+$('forgetBtn').addEventListener('click',()=>{forgetAll()});
+$('reBtn').addEventListener('click',async()=>{
+  if(!modelReady)await bootEngine();
+  for(const p of photos.values()){p.analysed=false;p.failed=false;p.fromCache=false;p.faces=[]}
+  await runQueue()});
+$('strict').addEventListener('input',e=>{threshold=e.target.value/100;$('strictVal').textContent=threshold.toFixed(2);recluster()});
+$('strict').addEventListener('change',()=>store.set('strict',String(Math.round(threshold*100))));
+$('filterMode').addEventListener('change',e=>{filterMode=e.target.value;renderLibrary()});
+$('clearFilter').addEventListener('click',()=>{filterSel.clear();renderLibrary()});
+$('manifestBtn').addEventListener('click',downloadManifest);
+$('quality').addEventListener('change',e=>{
+  QUALITY=QUALITY_MODES[e.target.value]||QUALITY_MODES.balanced;
+  store.set('quality',e.target.value);
+  toast(`${QUALITY.label} mode. Photos already analysed keep their old result until you press Re-analyse.`,'info');});
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape')return;
+  if(combineSel.size){combineSel.clear();renderCombineBar()}
+  else if(filterSel.size){filterSel.clear();renderLibrary()}});
+$('combineBtn').addEventListener('click',combineSelected);
+$('combineClear').addEventListener('click',()=>{combineSel.clear();renderCombineBar()});
+$('combineAll').addEventListener('click',()=>{
+  if(combineSel.size===clusters.length)combineSel.clear();
+  else clusters.forEach(c=>combineSel.add(c.id));
+  renderCombineBar();});
+$('combineKeep').addEventListener('change',()=>renderCombineBar());
+$('memToggle').addEventListener('change',e=>{
+  useMemory=e.target.checked;store.set('useMemory',useMemory?'1':'0');
+  toast(useMemory?'Using saved people again.':'Ignoring saved people for now. Nothing was deleted.','info');
+  recluster();});
+$('cfgSave').addEventListener('click',saveCfg);
+$('cfgClear').addEventListener('click',clearCfg);
+$('driveOpenBtn').addEventListener('click',openPicker);
+$('driveSaveBtn').addEventListener('click',saveToDrive);
+const dz=$('dropzone');
+['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag')}));
+['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag')}));
+dz.addEventListener('drop',e=>{if(e.dataTransfer.files.length)addLocal(e.dataTransfer.files)});
+['dragover','drop'].forEach(ev=>window.addEventListener(ev,e=>e.preventDefault()));
+window.addEventListener('beforeunload',e=>{
+  flushCache();
+  if(working||savePending||cacheQueue.size){e.preventDefault();e.returnValue=''}});
+
+/* ===================== boot ===================== */
+(async()=>{
+  loadCfg();updateControls();
+  if(store.get('useMemory')==='0'){useMemory=false;$('memToggle').checked=false}
+  const q=store.get('quality');
+  if(q&&QUALITY_MODES[q]){QUALITY=QUALITY_MODES[q];$('quality').value=q}
+  const sv=parseInt(store.get('strict')||'',10);
+  if(sv>=18&&sv<=70){threshold=sv/100;$('strict').value=String(sv);$('strictVal').textContent=threshold.toFixed(2)}
+  await loadPersisted();bootEngine();
+})();
+
+/* test hooks */
+window.photos=photos;window.getClusters=()=>clusters;window.DB=DB;
+window.getPrev=()=>prevClusters;window.getMerges=()=>merges;window.getSplits=()=>splits;
+window.getFilterSel=()=>filterSel;window.setFilterMode=m=>{filterMode=m};
+window.setModelReady=v=>{modelReady=v};window.RENDER_CAP=RENDER_CAP;
+window.setThreshold=v=>{threshold=v};window.readDimensions=readDimensions;
+window.getConcurrency=()=>CONCURRENCY;window.flushCache=flushCache;window.getQuality=()=>QUALITY;window.setUseMemory=v=>{useMemory=v};
+window.getNamed=()=>namedIds;window.getCombineSel=()=>combineSel;window.persistState=persistState;
+window.__simulateReload=async()=>{
+  await persistState();
+  for(const p of photos.values())if(p.thumbUrl)URL.revokeObjectURL(p.thumbUrl);
+  photos.clear();clusters=[];prevClusters=[];nextId=1;
+  manualAdd.clear();manualRemove.clear();merges.clear();splits.clear();
+  filterSel.clear();expanded.clear();$('library').innerHTML='';
+  await loadPersisted();
+};
+</script>
+</body>
+</html>
