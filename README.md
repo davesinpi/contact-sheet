@@ -1,5 +1,7 @@
 # Contact Sheet
 
+**[Open the app](https://davesinpi.github.io/photo-sorter/)** (runs entirely in your browser)
+
 Organise a photo library by **who is in the photos**. Faces are detected and matched
 entirely in your browser, grouped into people you can name, and exported as one folder
 per person, either as a `.zip` or into Google Drive.
@@ -35,13 +37,13 @@ credentials.
 
 | File | What it is |
 | --- | --- |
-| `photo-library.html` | The main app. Organises a library by person using face matching. |
+| `index.html` | The main app. Organises a library by person using face matching. |
 | `photo-sorter-drive.html` | Earlier, simpler version. Sorts by headcount into solo, group, and no people, with Drive support. |
 | `photo-sorter.html` | The same headcount sorter, local files only, no setup at all. |
 
 `photo-sorter.html` runs straight from a double-click. The other two need to be served
 over `http://localhost` or `https://`, because Google will not authorise a `file://`
-page for Drive access.
+page for Drive access. That is why the hosted copy exists.
 
 ## Running it
 
@@ -51,10 +53,12 @@ Download the file you want, then serve the folder:
 python -m http.server 8000
 ```
 
-Open `http://localhost:8000/photo-library.html`.
+Open `http://localhost:8000/`.
 
-Alternatively host the repository with GitHub Pages and open it at
-`https://<your-username>.github.io/<repo>/photo-library.html`.
+Or just use the hosted copy at
+[davesinpi.github.io/photo-sorter](https://davesinpi.github.io/photo-sorter/), which is
+this repository served by GitHub Pages. It is the same single file; your photos are
+still read on your own machine and never uploaded.
 
 ## Getting good results
 
@@ -91,8 +95,8 @@ In the [Google Cloud console](https://console.cloud.google.com/):
 4. Under **Credentials**, create an **API key**.
 5. Under **Credentials**, create an **OAuth client ID** of type **Web application**.
    Add the exact address you serve the page from to its **Authorised JavaScript
-   origins**, for example `http://localhost:8000` or
-   `https://<your-username>.github.io`.
+   origins**. Add `https://davesinpi.github.io` for the hosted copy, and
+   `http://localhost:8000` as well if you also run it locally. Host only, no path.
 6. Read your **project number** from **IAM & Admin → Settings**.
 
 Open the app, expand the **Google Drive** panel, and paste in the OAuth client ID, API
