@@ -216,6 +216,11 @@
     <label class="drive-status" style="display:flex;align-items:center;gap:7px;cursor:pointer">
       <input type="checkbox" id="memToggle" checked style="accent-color:var(--solo)"> use saved people
     </label>
+    <select id="quality" title="Lower settings analyse a smaller image, which is faster but can miss small or distant faces">
+      <option value="fast">Fast</option>
+      <option value="balanced" selected>Balanced</option>
+      <option value="thorough">Thorough</option>
+    </select>
     <input type="file" id="fileInput" accept="image/*,.heic,.heif" multiple hidden>
     <div class="slider-wrap">
       <label for="strict">grouping</label>
@@ -275,6 +280,16 @@
 const THUMB_MAX=340, ANALYSE_MAX=900, FACE_THUMB=88;
 const RENDER_CAP=60, BIG_BATCH=120, YIELD_EVERY=20;
 const DECODE_TIMEOUT=20000, PROCESS_TIMEOUT=45000;
+const QUALITY_MODES={
+  fast:     {analyse:560, input:320, label:'Fast'},
+  balanced: {analyse:800, input:416, label:'Balanced'},
+  thorough: {analyse:1100,input:512, label:'Thorough'}
+};
+let QUALITY=QUALITY_MODES.balanced;
+// Peak memory is now one small bitmap per lane, so a few photos can be in flight
+// at once. Decoding is CPU work and inference is GPU work, so overlapping them wins.
+const CONCURRENCY=Math.max(2,Math.min(4,Math.round((typeof navigator!=='undefined'&&navigator.hardwareConcurrency||4)/2)));
+let lastRate=0;
 const ID_MATCH=0.35;      // centroid distance under which a group may reclaim a known person
 const ID_MARGIN=0.75;     // best match must beat the runner-up by this ratio, else treat as new
 const POOL_DEDUPE=0.15;   // saved people closer than this are the same person, keep one
@@ -617,11 +632,63 @@ function unsplitPerson(id){splits.delete(id);scheduleSave();recluster()}
 </script>
 <script>
 /* ===================== image pipeline ===================== */
-async function decodeFull(file){
+/* Read pixel dimensions straight from the file header. A few kilobytes are
+   enough, so this costs almost nothing and lets us ask the decoder to produce a
+   small bitmap instead of decoding tens of megapixels we immediately throw away. */
+async function readDimensions(file){
+  try{
+    const buf=new Uint8Array(await file.slice(0,Math.min(file.size||0,65536)).arrayBuffer());
+    if(buf.length<16)return null;
+    const dv=new DataView(buf.buffer,buf.byteOffset,buf.byteLength);
+    // PNG
+    if(buf[0]===0x89&&buf[1]===0x50&&buf[2]===0x4E&&buf[3]===0x47)
+      return {w:dv.getUint32(16),h:dv.getUint32(20)};
+    // GIF
+    if(buf[0]===0x47&&buf[1]===0x49&&buf[2]===0x46)
+      return {w:buf[6]|buf[7]<<8,h:buf[8]|buf[9]<<8};
+    // WebP
+    if(buf[0]===0x52&&buf[1]===0x49&&buf[2]===0x46&&buf[3]===0x46&&
+       buf[8]===0x57&&buf[9]===0x45&&buf[10]===0x42&&buf[11]===0x50){
+      const tag=String.fromCharCode(buf[12],buf[13],buf[14],buf[15]);
+      if(tag==='VP8X')return {w:1+(buf[24]|buf[25]<<8|buf[26]<<16),h:1+(buf[27]|buf[28]<<8|buf[29]<<16)};
+      if(tag==='VP8 ')return {w:(buf[26]|buf[27]<<8)&0x3fff,h:(buf[28]|buf[29]<<8)&0x3fff};
+      if(tag==='VP8L'){const b=buf[21]|buf[22]<<8|buf[23]<<16|buf[24]<<24;
+        return {w:1+(b&0x3fff),h:1+((b>>14)&0x3fff)};}
+      return null;
+    }
+    // JPEG: walk the segment markers to the frame header
+    if(buf[0]===0xFF&&buf[1]===0xD8){
+      let i=2;
+      while(i<buf.length-9){
+        if(buf[i]!==0xFF){i++;continue}
+        const m=buf[i+1];
+        if(m===0xD8||m===0x01||(m>=0xD0&&m<=0xD7)){i+=2;continue}
+        const len=dv.getUint16(i+2);
+        const isSOF=(m>=0xC0&&m<=0xCF)&&m!==0xC4&&m!==0xC8&&m!==0xCC;
+        if(isSOF)return {h:dv.getUint16(i+5),w:dv.getUint16(i+7)};
+        i+=2+len;
+      }
+    }
+  }catch(e){}
+  return null;
+}
+async function decodeFull(file,maxDim){
   if(typeof createImageBitmap==='function'){
-    try{const bmp=await withTimeout(createImageBitmap(file),DECODE_TIMEOUT,'decode');
-      return {src:bmp,w:bmp.width,h:bmp.height,release(){try{bmp.close&&bmp.close()}catch(e){}}}}
-    catch(e){}
+    const dims=await readDimensions(file);
+    let opts;
+    if(dims&&dims.w>0&&dims.h>0){
+      const scale=Math.min(1,maxDim/Math.max(dims.w,dims.h));
+      if(scale<1)opts={resizeWidth:Math.max(1,Math.round(dims.w*scale)),
+                       resizeHeight:Math.max(1,Math.round(dims.h*scale)),
+                       resizeQuality:'medium'};
+    }
+    // imageOrientation also fixes sideways phone photos
+    for(const o of [Object.assign({imageOrientation:'from-image'},opts||{}),opts,undefined]){
+      try{
+        const bmp=await withTimeout(o?createImageBitmap(file,o):createImageBitmap(file),DECODE_TIMEOUT,'decode');
+        return {src:bmp,w:bmp.width,h:bmp.height,release(){try{bmp.close&&bmp.close()}catch(e){}}};
+      }catch(e){}
+    }
   }
   const url=URL.createObjectURL(file);
   try{
@@ -649,28 +716,45 @@ function cropFaceThumb(canvas,box){
   try{return c.toDataURL('image/jpeg',0.8)}catch(e){return null}
 }
 async function processPhoto(p,doFaces){
-  const d=await decodeFull(p.file);
+  const need=doFaces?QUALITY.analyse:THUMB_MAX;
+  const d=await decodeFull(p.file,need);
   try{
-    let thumbBlob=null;
-    if(!p.thumbUrl){
-      const tc=scaledCanvas(d.src,d.w,d.h,THUMB_MAX);
-      thumbBlob=await canvasToBlob(tc,'image/jpeg',0.82);
-      if(thumbBlob)p.thumbUrl=URL.createObjectURL(thumbBlob);
-      tc.width=tc.height=1;p.thumbed=true;
-    }
+    let thumbBlob=null,wc=null;
     if(doFaces&&!p.analysed){
-      const wc=scaledCanvas(d.src,d.w,d.h,ANALYSE_MAX);
+      wc=scaledCanvas(d.src,d.w,d.h,QUALITY.analyse);
       const dets=await faceapi.detectAllFaces(wc,
-          new faceapi.TinyFaceDetectorOptions({inputSize:416,scoreThreshold:0.5}))
+          new faceapi.TinyFaceDetectorOptions({inputSize:QUALITY.input,scoreThreshold:0.5}))
         .withFaceLandmarks().withFaceDescriptors();
       p.faces=dets.map(det=>{const b=det.detection.box;
         return {box:{x:b.x/wc.width,y:b.y/wc.height,w:b.width/wc.width,h:b.height/wc.height},
           desc:Array.from(det.descriptor),thumb:cropFaceThumb(wc,b)}});
-      wc.width=wc.height=1;p.analysed=true;
+      p.analysed=true;
     }
+    if(!p.thumbUrl){
+      // reuse the analysis canvas where we have one: it is already small, so this
+      // avoids a second draw from the decoded source
+      const src=wc||d.src, sw=wc?wc.width:d.w, sh=wc?wc.height:d.h;
+      const tc=scaledCanvas(src,sw,sh,THUMB_MAX);
+      thumbBlob=await canvasToBlob(tc,'image/jpeg',0.82);
+      if(thumbBlob)p.thumbUrl=URL.createObjectURL(thumbBlob);
+      tc.width=tc.height=1;p.thumbed=true;
+    }
+    if(wc)wc.width=wc.height=1;
     p.failed=false;
-    if(p.analysed)await DB.set('faces',p.key,{faces:p.faces,thumb:thumbBlob||null,at:Date.now()});
+    if(p.analysed)queueCacheWrite(p.key,{faces:p.faces,thumb:thumbBlob||null,at:Date.now()});
   }finally{d.release()}
+}
+const cacheQueue=new Map();let cacheTimer=null;
+function queueCacheWrite(key,val){
+  cacheQueue.set(key,val);
+  if(cacheQueue.size>=12)flushCache();
+  else if(!cacheTimer)cacheTimer=setTimeout(flushCache,800);
+}
+async function flushCache(){
+  if(cacheTimer){clearTimeout(cacheTimer);cacheTimer=null}
+  if(!cacheQueue.size)return;
+  const items=[...cacheQueue.entries()];cacheQueue.clear();
+  for(const [k,v] of items)await DB.set('faces',k,v);
 }
 async function hydrateFromCache(p){
   const rec=await DB.get('faces',p.key);
@@ -688,20 +772,33 @@ async function runQueue(){
   }
   if(cached){toast(`${cached} photo${cached>1?'s':''} restored from memory, no re-analysis needed.`,'ok');renderLibrary()}
   const pending=[...photos.values()].filter(p=>!p.failed&&(!p.thumbUrl||(modelReady&&!p.analysed)));
-  if(!pending.length){recluster();updateControls();return}
+  if(!pending.length){await flushCache();recluster();updateControls();return}
   working=true;updateControls();
-  let done=0,failed=0;
-  for(const p of pending){
-    setStatus(`Processing ${done+1} / ${pending.length}…`,'busy');
-    setProgress(done,pending.length);
-    try{await withTimeout(processPhoto(p,modelReady),PROCESS_TIMEOUT,'processing '+p.name)}
-    catch(e){console.error('failed on',p.name,e);p.failed=true;p.analysed=false;failed++}
-    done++;setProgress(done,pending.length);refreshCard(p);
-    await nextFrame();
-    if(done%YIELD_EVERY===0)await new Promise(r=>setTimeout(r,60));
-  }
+  const total=pending.length;
+  let done=0,failed=0,next=0;
+  const t0=Date.now();
+  const lane=async()=>{
+    while(true){
+      const i=next++;
+      if(i>=total)break;
+      const p=pending[i];
+      try{await withTimeout(processPhoto(p,modelReady),PROCESS_TIMEOUT,'processing '+p.name)}
+      catch(e){console.error('failed on',p.name,e);p.failed=true;p.analysed=false;failed++}
+      done++;setProgress(done,total);refreshCard(p);
+      const secs=(Date.now()-t0)/1000;
+      const rate=secs>0.5?done/secs:0;
+      setStatus(`Processing ${done} / ${total}${rate?' · '+Math.round(rate*60)+'/min':''}…`,'busy');
+      if(done%4===0)await nextFrame();
+    }
+  };
+  await Promise.all(Array.from({length:Math.min(CONCURRENCY,total)},lane));
+  await flushCache();
   working=false;setProgress(1,1);
-  setStatus(modelReady?'Face engine ready':'Manual mode — face engine unavailable',modelReady?'ok':'err');
+  const secs=(Date.now()-t0)/1000;
+  lastRate=secs>0?total/secs:0;
+  setStatus(modelReady
+    ?`Face engine ready${lastRate?' · '+Math.round(lastRate*60)+'/min':''}`
+    :'Manual mode — face engine unavailable',modelReady?'ok':'err');
   if(failed)toast(`${failed} photo${failed>1?'s':''} could not be read. See "Could not process" to retry.`,'err');
   recluster();updateControls();
 }
@@ -714,6 +811,7 @@ async function bootEngine(){
   try{
     await loadScript(['https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js',
       'https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js']);
+    try{if(faceapi.tf&&faceapi.tf.setBackend){await faceapi.tf.setBackend('webgl');if(faceapi.tf.ready)await faceapi.tf.ready()}}catch(e){}
     let loaded=false,lastErr=null;
     for(const base of WEIGHT_BASES){
       try{
@@ -724,7 +822,17 @@ async function bootEngine(){
       }catch(e){lastErr=e}
     }
     if(!loaded)throw lastErr||new Error('weights failed');
-    modelReady=true;setStatus('Face engine ready','ok');
+    modelReady=true;
+    let be='';
+    try{
+      const tf=faceapi.tf;
+      if(tf&&tf.setBackend&&tf.getBackend&&tf.getBackend()!=='webgl'){
+        try{await tf.setBackend('webgl');if(tf.ready)await tf.ready()}catch(e){}
+      }
+      be=(tf&&tf.getBackend&&tf.getBackend())||'';
+    }catch(e){}
+    setStatus('Face engine ready'+(be?' ('+be+')':''),'ok');
+    if(be==='cpu')toast('Running on the CPU because WebGL is unavailable, which is many times slower. Enabling hardware acceleration in your browser settings will speed this up a lot.','err');
   }catch(e){
     console.error(e);modelReady=false;
     setStatus('Manual mode — face engine unavailable','err');
@@ -1223,6 +1331,10 @@ $('strict').addEventListener('change',()=>store.set('strict',String(Math.round(t
 $('filterMode').addEventListener('change',e=>{filterMode=e.target.value;renderLibrary()});
 $('clearFilter').addEventListener('click',()=>{filterSel.clear();renderLibrary()});
 $('manifestBtn').addEventListener('click',downloadManifest);
+$('quality').addEventListener('change',e=>{
+  QUALITY=QUALITY_MODES[e.target.value]||QUALITY_MODES.balanced;
+  store.set('quality',e.target.value);
+  toast(`${QUALITY.label} mode. Photos already analysed keep their old result until you press Re-analyse.`,'info');});
 document.addEventListener('keydown',e=>{
   if(e.key!=='Escape')return;
   if(combineSel.size){combineSel.clear();renderCombineBar()}
@@ -1248,12 +1360,15 @@ const dz=$('dropzone');
 dz.addEventListener('drop',e=>{if(e.dataTransfer.files.length)addLocal(e.dataTransfer.files)});
 ['dragover','drop'].forEach(ev=>window.addEventListener(ev,e=>e.preventDefault()));
 window.addEventListener('beforeunload',e=>{
-  if(working||savePending){e.preventDefault();e.returnValue=''}});
+  flushCache();
+  if(working||savePending||cacheQueue.size){e.preventDefault();e.returnValue=''}});
 
 /* ===================== boot ===================== */
 (async()=>{
   loadCfg();updateControls();
   if(store.get('useMemory')==='0'){useMemory=false;$('memToggle').checked=false}
+  const q=store.get('quality');
+  if(q&&QUALITY_MODES[q]){QUALITY=QUALITY_MODES[q];$('quality').value=q}
   const sv=parseInt(store.get('strict')||'',10);
   if(sv>=18&&sv<=70){threshold=sv/100;$('strict').value=String(sv);$('strictVal').textContent=threshold.toFixed(2)}
   await loadPersisted();bootEngine();
@@ -1264,7 +1379,8 @@ window.photos=photos;window.getClusters=()=>clusters;window.DB=DB;
 window.getPrev=()=>prevClusters;window.getMerges=()=>merges;window.getSplits=()=>splits;
 window.getFilterSel=()=>filterSel;window.setFilterMode=m=>{filterMode=m};
 window.setModelReady=v=>{modelReady=v};window.RENDER_CAP=RENDER_CAP;
-window.setThreshold=v=>{threshold=v};window.setUseMemory=v=>{useMemory=v};
+window.setThreshold=v=>{threshold=v};window.readDimensions=readDimensions;
+window.getConcurrency=()=>CONCURRENCY;window.flushCache=flushCache;window.getQuality=()=>QUALITY;window.setUseMemory=v=>{useMemory=v};
 window.getNamed=()=>namedIds;window.getCombineSel=()=>combineSel;window.persistState=persistState;
 window.__simulateReload=async()=>{
   await persistState();
