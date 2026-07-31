@@ -41,7 +41,8 @@
   details.drive>summary::-webkit-details-marker{display:none}
   details.drive>summary .chev{margin-left:auto;color:var(--muted);font-family:"Space Mono",monospace;font-size:12px}
   details.drive[open]>summary{border-bottom:1px solid var(--line)}
-  .drive-dot{width:9px;height:9px;border-radius:2px;background:var(--drive)}
+  .drive-dot{width:9px;height:9px;border-radius:2px;background:var(--muted);transition:background .2s,box-shadow .2s}
+  .drive-dot.on{background:var(--drive);box-shadow:0 0 0 3px rgba(139,212,139,.16)}
   .drive-body{padding:16px}
   .drive-body p.hint{margin:0 0 14px;font-size:13px;color:var(--muted);font-family:"Space Mono",monospace;line-height:1.7}
   .drive-body a{color:var(--solo)}
@@ -53,6 +54,14 @@
   .field input:focus{outline:2px solid var(--solo);outline-offset:1px;border-color:var(--solo)}
   .drive-actions{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
   .drive-status{font-family:"Space Mono",monospace;font-size:12px;color:var(--muted)}
+  details.adv{margin-top:16px;border-top:1px solid var(--line);padding-top:13px}
+  details.adv>summary{cursor:pointer;list-style:none;user-select:none;
+    font-family:"Space Mono",monospace;font-size:12px;color:var(--muted);transition:color .15s}
+  details.adv>summary::-webkit-details-marker{display:none}
+  details.adv>summary::before{content:'▸ '}
+  details.adv[open]>summary::before{content:'▾ '}
+  details.adv>summary:hover{color:var(--ink)}
+  details.adv .adv-body{padding-top:14px}
 
   .controls{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin:22px 0 0}
   .btn{font-family:inherit;font-size:14px;font-weight:500;color:var(--ink);background:var(--panel-2);
@@ -160,21 +169,33 @@
   </header>
 
   <details class="drive">
-    <summary><span class="drive-dot"></span> Google Drive <span class="chev">set up ▸</span></summary>
+    <summary><span class="drive-dot" id="driveDot"></span> Google Drive <span class="chev" id="driveChev">connect ▸</span></summary>
     <div class="drive-body">
       <p class="hint">
-        One-time setup. In the <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud console</a>: create a project, enable the <b>Google Picker API</b> and <b>Google Drive API</b>, then under <b>Credentials</b> make an <b>API key</b> and an <b>OAuth client ID</b> of type <b>Web application</b>. Add the address you serve this page from (for example <code>http://localhost:8000</code>) to that client's <b>Authorised JavaScript origins</b>. The <b>project number</b> is under IAM &amp; Admin → Settings. Paste the three values below. They are stored only in this browser.
+        Sign in with Google to open photos straight from Drive and save the sorted sets back to it. The app asks only for the <b>drive.file</b> scope, so it sees the files you pick in the picker and the files it creates, and nothing else in your Drive. Photos are still analysed on this machine.
       </p>
-      <div class="field-row">
-        <div class="field"><label for="cfgClient">OAuth client ID</label><input id="cfgClient" placeholder="xxxxx.apps.googleusercontent.com" autocomplete="off"></div>
-        <div class="field"><label for="cfgKey">API key</label><input id="cfgKey" placeholder="AIza…" autocomplete="off"></div>
-        <div class="field"><label for="cfgApp">Project number</label><input id="cfgApp" placeholder="123456789012" autocomplete="off"></div>
-      </div>
       <div class="drive-actions">
-        <button class="btn primary" id="cfgSave">Save credentials</button>
-        <button class="btn ghost" id="cfgClear">Forget</button>
+        <button class="btn drive" id="driveConnectBtn">Connect Google Drive</button>
+        <button class="btn ghost" id="driveDisconnectBtn" hidden>Disconnect</button>
         <span class="drive-status" id="driveStatus">Not connected</span>
       </div>
+      <details class="adv" id="advCfg">
+        <summary>Use your own Google Cloud project</summary>
+        <div class="adv-body">
+          <p class="hint">
+            Only needed if you host this page yourself, or would rather connect through your own project. In the <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud console</a>: enable the <b>Google Picker API</b> and <b>Google Drive API</b>, then under <b>Credentials</b> make an <b>API key</b> and an <b>OAuth client ID</b> of type <b>Web application</b> whose <b>Authorised JavaScript origins</b> include the address you serve this page from (for example <code>http://localhost:8000</code>). The <b>project number</b> is under IAM &amp; Admin → Settings. Values are stored only in this browser.
+          </p>
+          <div class="field-row">
+            <div class="field"><label for="cfgClient">OAuth client ID</label><input id="cfgClient" placeholder="xxxxx.apps.googleusercontent.com" autocomplete="off"></div>
+            <div class="field"><label for="cfgKey">API key</label><input id="cfgKey" placeholder="AIza…" autocomplete="off"></div>
+            <div class="field"><label for="cfgApp">Project number</label><input id="cfgApp" placeholder="123456789012" autocomplete="off"></div>
+          </div>
+          <div class="drive-actions">
+            <button class="btn primary" id="cfgSave">Use these credentials</button>
+            <button class="btn ghost" id="cfgClear">Reset to built-in</button>
+          </div>
+        </div>
+      </details>
     </div>
   </details>
 
@@ -388,54 +409,137 @@ async function downloadZip(tray){
 }
 
 /* ===================== Google Drive ===================== */
-let driveCfg={clientId:'',apiKey:'',appId:''};
-let gapiReady=false,gisReady=false,tokenClient=null,accessToken=null,googleLoading=null;
+/* Built-in connection. Fill these in once in the copy you host, and everyone
+   using it connects with a single click — no console trip, nothing to paste.
+   They are public values by design: the OAuth client only works on the origins
+   you authorise, and the API key should be restricted to the same referrers.
+   Leave them blank and the app falls back to the panel in the UI. */
+const BUILTIN_DRIVE={
+  clientId:'',   // 000000000000-xxxxxxxx.apps.googleusercontent.com
+  apiKey:'',     // AIzaSy…
+  appId:''       // 000000000000   (Google Cloud project number)
+};
+const SCOPE='https://www.googleapis.com/auth/drive.file email';
+const TOKEN_KEY='driveToken';
+let customCfg=null,driveCfg=Object.assign({},BUILTIN_DRIVE);
+let scriptsLoaded=false,googleLoading=null,tokenClient=null;
+let accessToken=null,tokenExpiry=0,account='';
 function driveReady(){return !!(driveCfg.clientId&&driveCfg.apiKey&&driveCfg.appId)}
-const SCOPE='https://www.googleapis.com/auth/drive.file';
+function driveConnected(){return !!accessToken&&Date.now()<tokenExpiry}
 
 function loadCfg(){
-  const raw=store.get('driveCfg');if(raw){try{driveCfg=JSON.parse(raw)}catch(e){}}
-  $('cfgClient').value=driveCfg.clientId||'';$('cfgKey').value=driveCfg.apiKey||'';$('cfgApp').value=driveCfg.appId||'';
-  $('driveStatus').textContent=driveReady()?'Credentials saved — ready to connect':'Not connected';
+  const raw=store.get('driveCfg');
+  if(raw){try{const c=JSON.parse(raw);if(c&&c.clientId&&c.apiKey&&c.appId)customCfg=c}catch(e){}}
+  driveCfg=customCfg||Object.assign({},BUILTIN_DRIVE);
+  $('cfgClient').value=customCfg?customCfg.clientId:'';
+  $('cfgKey').value=customCfg?customCfg.apiKey:'';
+  $('cfgApp').value=customCfg?customCfg.appId:'';
+  if(customCfg||!driveReady())$('advCfg').open=true;
+  restoreToken();renderDrive();
 }
 function saveCfg(){
-  driveCfg={clientId:$('cfgClient').value.trim(),apiKey:$('cfgKey').value.trim(),appId:$('cfgApp').value.trim()};
-  store.set('driveCfg',JSON.stringify(driveCfg));
-  gapiReady=gisReady=false;tokenClient=null;accessToken=null;googleLoading=null;
-  const ok=driveReady();
-  $('driveStatus').textContent=ok?'Credentials saved — ready to connect':'Fill in all three fields';
-  toast(ok?'Drive credentials saved.':'Fill in all three fields.',ok?'ok':'err');
+  const c={clientId:$('cfgClient').value.trim(),apiKey:$('cfgKey').value.trim(),appId:$('cfgApp').value.trim()};
+  if(!(c.clientId&&c.apiKey&&c.appId)){toast('Fill in all three fields.','err');return}
+  customCfg=c;store.set('driveCfg',JSON.stringify(c));driveCfg=c;resetGoogle();
+  toast('Connecting through your own project now.','ok');renderDrive();
+}
+function clearCfg(){
+  customCfg=null;store.del('driveCfg');
+  $('cfgClient').value=$('cfgKey').value=$('cfgApp').value='';
+  driveCfg=Object.assign({},BUILTIN_DRIVE);resetGoogle();
+  toast(driveReady()?'Back to the built-in connection.':'Credentials cleared.','info');renderDrive();
+}
+function resetGoogle(){googleLoading=null;tokenClient=null;forgetToken()}
+
+/* the access token lives in this tab only, so a reload does not re-prompt */
+function restoreToken(){
+  try{
+    const t=JSON.parse(sessionStorage.getItem(TOKEN_KEY)||'null');
+    if(t&&t.clientId===driveCfg.clientId&&t.exp>Date.now()+30000){accessToken=t.token;tokenExpiry=t.exp;account=t.account||''}
+    else sessionStorage.removeItem(TOKEN_KEY);
+  }catch(e){}
+}
+function rememberToken(){
+  try{sessionStorage.setItem(TOKEN_KEY,JSON.stringify({token:accessToken,exp:tokenExpiry,account,clientId:driveCfg.clientId}))}catch(e){}
+}
+function forgetToken(){accessToken=null;tokenExpiry=0;account='';try{sessionStorage.removeItem(TOKEN_KEY)}catch(e){}}
+
+function renderDrive(){
+  const on=driveConnected();
+  $('driveDot').classList.toggle('on',on);
+  $('driveChev').textContent=on?'connected ▸':'connect ▸';
+  $('driveConnectBtn').hidden=on;$('driveDisconnectBtn').hidden=!on;
+  $('driveConnectBtn').disabled=!driveReady();
+  $('driveStatus').textContent=on?(account?'Connected as '+account:'Connected')
+    :driveReady()?'Not connected':'No connection configured — see below';
   updateControls();
 }
-function clearCfg(){driveCfg={clientId:'',apiKey:'',appId:''};store.del('driveCfg');
-  $('cfgClient').value=$('cfgKey').value=$('cfgApp').value='';accessToken=null;
-  $('driveStatus').textContent='Not connected';updateControls();toast('Drive credentials forgotten.','info')}
-
 async function ensureGoogle(){
   if(!driveReady())throw new Error('missing credentials');
-  if(gapiReady&&gisReady)return;
-  if(!googleLoading){
-    googleLoading=(async()=>{
+  if(!googleLoading)googleLoading=(async()=>{
+    if(!scriptsLoaded){
       await loadScriptCb('https://apis.google.com/js/api.js');
-      await new Promise(res=>gapi.load('picker',res));gapiReady=true;
+      await new Promise(res=>gapi.load('picker',res));
       await loadScriptCb('https://accounts.google.com/gsi/client');
-      tokenClient=google.accounts.oauth2.initTokenClient({client_id:driveCfg.clientId,scope:SCOPE,callback:()=>{}});
-      gisReady=true;
-    })();
-  }
+      scriptsLoaded=true;
+    }
+    tokenClient=google.accounts.oauth2.initTokenClient({client_id:driveCfg.clientId,scope:SCOPE,callback:()=>{}});
+  })();
   await googleLoading;
 }
-function getToken(){
-  return new Promise((resolve,reject)=>{
-    if(!tokenClient)return reject(new Error('not initialised'));
-    tokenClient.callback=(resp)=>{if(resp&&resp.error)return reject(resp);accessToken=resp.access_token;resolve(accessToken)};
-    tokenClient.requestAccessToken({prompt:accessToken?'':'consent'});
-  });
+function requestToken(){return new Promise((resolve,reject)=>{
+  if(!tokenClient)return reject(new Error('not initialised'));
+  tokenClient.callback=resp=>{
+    if(!resp||resp.error)return reject(resp||new Error('no token'));
+    accessToken=resp.access_token;
+    tokenExpiry=Date.now()+((+resp.expires_in||3600)-60)*1000;
+    rememberToken();resolve(accessToken)};
+  tokenClient.error_callback=err=>reject(err);
+  try{tokenClient.requestAccessToken({prompt:''})}catch(e){reject(e)}})}
+async function ensureToken(){
+  if(driveConnected())return accessToken;
+  await ensureGoogle();await requestToken();
+  if(!account)await fetchAccount();
+  renderDrive();return accessToken;
+}
+async function fetchAccount(){
+  try{
+    const res=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+accessToken}});
+    if(res.ok){account=(await res.json()).email||'';rememberToken()}
+  }catch(e){}
+}
+/* every Drive call goes through here, so an hour-old token refreshes itself
+   instead of failing an upload half way through */
+async function driveFetch(url,opts,retried){
+  const token=await ensureToken();
+  const o=Object.assign({},opts);
+  o.headers=Object.assign({},o.headers,{Authorization:'Bearer '+token});
+  const res=await fetch(url,o);
+  if(res.status===401&&!retried){forgetToken();renderDrive();return driveFetch(url,opts,true)}
+  return res;
+}
+function driveAuthMessage(err){
+  const t=(err&&(err.type||err.error))||'';
+  if(t==='popup_closed'||t==='popup_failed_to_open')return 'The Google sign-in window was closed or blocked. Allow pop-ups for this page and try again.';
+  if(t==='access_denied')return 'Google sign-in was declined.';
+  return 'Could not connect to Drive. Check that this address is an authorised JavaScript origin on the OAuth client.';
+}
+async function connectDrive(){
+  $('driveStatus').textContent='Opening Google sign-in…';
+  try{
+    await ensureToken();
+    toast(account?'Connected to Drive as '+account:'Connected to Google Drive.','ok');
+  }catch(err){console.error(err);renderDrive();toast(driveAuthMessage(err),'err')}
+}
+function disconnectDrive(){
+  const t=accessToken;forgetToken();
+  try{if(t&&window.google&&google.accounts&&google.accounts.oauth2)google.accounts.oauth2.revoke(t,()=>{})}catch(e){}
+  renderDrive();toast('Disconnected from Google Drive.','info');
 }
 async function openPicker(){
   try{
     $('driveStatus').textContent='Connecting…';
-    await ensureGoogle();await getToken();
+    await ensureToken();
     $('driveStatus').textContent='Choose photos in the picker window';
     const view=new google.picker.DocsView(google.picker.ViewId.DOCS_IMAGES)
       .setIncludeFolders(true).setSelectFolderEnabled(false).setMode(google.picker.DocsViewMode.GRID);
@@ -445,14 +549,13 @@ async function openPicker(){
       .addView(view).setCallback(onPicked).build();
     picker.setVisible(true);
   }catch(err){
-    console.error(err);
-    $('driveStatus').textContent='Connection failed';
-    toast('Drive connection failed. Check the credentials and that this origin is authorised.','err');
+    console.error(err);renderDrive();
+    toast(driveAuthMessage(err),'err');
   }
 }
 async function onPicked(data){
   if(data.action!==google.picker.Action.PICKED){
-    if(data.action===google.picker.Action.CANCEL)$('driveStatus').textContent='Connected';
+    if(data.action===google.picker.Action.CANCEL)renderDrive();
     return;
   }
   const docs=data.docs||[];
@@ -461,8 +564,7 @@ async function onPicked(data){
     $('driveStatus').textContent=`Downloading ${got+1} / ${docs.length}…`;
     setProgress(got,docs.length);
     try{
-      const res=await fetch(`https://www.googleapis.com/drive/v3/files/${d.id}?alt=media`,
-        {headers:{Authorization:'Bearer '+accessToken}});
+      const res=await driveFetch(`https://www.googleapis.com/drive/v3/files/${d.id}?alt=media`);
       if(!res.ok)throw new Error('http '+res.status);
       const blob=await res.blob();
       files.push(new File([blob],d.name||('drive-'+d.id),{type:blob.type||d.mimeType||'image/jpeg'}));
@@ -477,8 +579,8 @@ async function onPicked(data){
 }
 async function driveCreateFolder(name,parentId){
   const meta={name,mimeType:'application/vnd.google-apps.folder'};if(parentId)meta.parents=[parentId];
-  const res=await fetch('https://www.googleapis.com/drive/v3/files?fields=id',
-    {method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify(meta)});
+  const res=await driveFetch('https://www.googleapis.com/drive/v3/files?fields=id',
+    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(meta)});
   if(!res.ok)throw new Error('folder create failed');return (await res.json()).id;
 }
 async function driveUpload(file,parentId){
@@ -486,15 +588,15 @@ async function driveUpload(file,parentId){
   const form=new FormData();
   form.append('metadata',new Blob([JSON.stringify(meta)],{type:'application/json'}));
   form.append('file',file);
-  const res=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
-    {method:'POST',headers:{Authorization:'Bearer '+accessToken},body:form});
+  const res=await driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
+    {method:'POST',body:form});
   return res.ok;
 }
 async function saveToDrive(){
   if(!photos.size)return;
   const btn=$('driveSaveBtn');btn.disabled=true;
   try{
-    await ensureGoogle();await getToken();
+    await ensureToken();
     $('saveStatus').textContent='Creating folders…';
     const stamp=new Date().toISOString().slice(0,16).replace('T',' ');
     const root=await driveCreateFolder('Sorted photos '+stamp,null);
@@ -529,6 +631,8 @@ $('sens').addEventListener('input',e=>{threshold=e.target.value/100;$('sensVal')
 document.querySelectorAll('[data-dl]').forEach(b=>b.addEventListener('click',()=>downloadZip(b.dataset.dl)));
 $('cfgSave').addEventListener('click',saveCfg);
 $('cfgClear').addEventListener('click',clearCfg);
+$('driveConnectBtn').addEventListener('click',connectDrive);
+$('driveDisconnectBtn').addEventListener('click',disconnectDrive);
 $('driveOpenBtn').addEventListener('click',openPicker);
 $('driveSaveBtn').addEventListener('click',saveToDrive);
 
