@@ -7,8 +7,7 @@ entirely in your browser, grouped into people you can name, and exported as one 
 per person, either as a `.zip` or into Google Drive.
 
 No image and no face data ever leaves your machine. The only network requests are for
-loading the models once, and, if you choose to use it, Google Drive with your own
-credentials.
+loading the models once, and, if you choose to use it, Google Drive.
 
 ## What it does
 
@@ -81,33 +80,62 @@ which keeps stale records from accumulating.
 If results ever look wrong, untick **use saved people** to ignore the saved data
 without deleting it, and compare. **Forget saved people** clears it for good.
 
-## Google Drive setup
+## Google Drive
 
 Optional. Everything except Drive import and export works without it.
 
-In the [Google Cloud console](https://console.cloud.google.com/):
+Expand the **Google Drive** panel and press **Connect Google Drive**. That opens the
+normal Google sign-in and consent window; approve it and the panel shows the account
+you are connected as. Nothing to create, nothing to paste.
+
+The app requests only the narrow `drive.file` scope, so it can read the files you pick
+in the picker and the files it creates. It cannot see anything else in your Drive. It
+also asks for `email`, purely so the panel can tell you which account is connected.
+
+The access token lives in the tab, not on disk, so reloading keeps you connected and
+closing the tab signs you out. **Disconnect** revokes the token immediately.
+
+### Hosting your own copy
+
+The built-in connection is tied to specific origins, so a copy served from your own
+address needs its own Google credentials. Two ways to supply them.
+
+**Bake them in**, so everyone using your copy gets the one-click connection. In the
+[Google Cloud console](https://console.cloud.google.com/):
 
 1. Create a project.
 2. Enable the **Google Picker API** and the **Google Drive API**.
-3. Under **Google Auth Platform → Audience**, set the user type to **External**, then
-   add your own Google account under **Test users**. Leaving it on Internal causes an
-   `org_internal` error for personal Gmail accounts.
-4. Under **Credentials**, create an **API key**.
-5. Under **Credentials**, create an **OAuth client ID** of type **Web application**.
-   Add the exact address you serve the page from to its **Authorised JavaScript
-   origins**. Add `https://davesinpi.github.io` for the hosted copy, and
-   `http://localhost:8000` as well if you also run it locally. Host only, no path.
-6. Read your **project number** from **IAM & Admin → Settings**.
+3. Under **Credentials**, create an **API key**. Restrict it to your origins under
+   **Application restrictions → Websites**.
+4. Under **Credentials**, create an **OAuth client ID** of type **Web application**.
+   Add every address you serve the page from to its **Authorised JavaScript origins** —
+   for example `https://you.github.io` and `http://localhost:8000`. Host only, no path.
+5. Read your **project number** from **IAM & Admin → Settings**.
+6. Under **Google Auth Platform → Audience**, publish the app. `drive.file` and `email`
+   are both [non-sensitive scopes](https://developers.google.com/identity/protocols/oauth2/production-readiness/sensitive-scope-verification),
+   so no verification review is required and users do not see an unverified warning. If
+   you leave it in **Testing** instead, add each Google account under **Test users** and
+   expect the unverified-app screen (choose **Advanced**, then continue).
 
-Open the app, expand the **Google Drive** panel, and paste in the OAuth client ID, API
-key and project number. They are kept in your browser only and are never committed to
-this repository.
+Then fill in the `BUILTIN_DRIVE` block near the top of the Google Drive section in
+`index.html` and `photo-sorter-drive.html`:
 
-On first connection Google warns that the app is unverified. That is expected for a
-private app you built yourself: choose **Advanced**, then continue.
+```js
+const BUILTIN_DRIVE={
+  clientId:'000000000000-xxxxxxxx.apps.googleusercontent.com',
+  apiKey:'AIzaSy…',
+  appId:'000000000000'
+};
+```
 
-The app requests only the narrow `drive.file` scope, so it can read the files you pick
-in the picker and the files it creates. It cannot see anything else in your Drive.
+These three values are public by design. The OAuth client only works on the origins you
+authorised, and the API key should be referrer-restricted to the same ones.
+
+**Or paste them at runtime.** Leave `BUILTIN_DRIVE` blank and each person opens **Use
+your own Google Cloud project** inside the Drive panel and enters the three values
+themselves. They are kept in that browser only and are never committed here. This is
+also the escape hatch if you want to connect through your own project on a copy that
+already has a built-in one.
 
 ### Export modes
 
@@ -138,7 +166,9 @@ alongside.
 
 - Photos are analysed in the browser and are never uploaded to any server.
 - Face signatures and thumbnails are stored only in this browser, for your own reuse.
-- Google credentials are entered at runtime and stay in your browser.
+- Signing in to Drive is a standard Google OAuth flow. The token stays in the tab and is
+  revoked when you press Disconnect. No server of ours ever sees it, because there is no
+  server of ours.
 - Drive export writes into a new folder and leaves your originals in place.
 
 ## Built with
