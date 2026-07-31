@@ -1,6 +1,6 @@
 # Contact Sheet
 
-**[Open the app](https://davesinpi.github.io/photo-sorter/)** (runs entirely in your browser)
+**[Open the app](https://davesinpi.github.io/contact-sheet/)** (runs entirely in your browser)
 
 Organise a photo library by **who is in the photos**. Faces are detected and matched
 entirely in your browser, grouped into people you can name, and exported as one folder
@@ -56,7 +56,7 @@ python -m http.server 8000
 Open `http://localhost:8000/`.
 
 Or just use the hosted copy at
-[davesinpi.github.io/photo-sorter](https://davesinpi.github.io/photo-sorter/), which is
+[davesinpi.github.io/contact-sheet](https://davesinpi.github.io/contact-sheet/), which is
 this repository served by GitHub Pages. It is the same single file; your photos are
 still read on your own machine and never uploaded.
 
